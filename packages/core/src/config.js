@@ -29,6 +29,8 @@ export const DEFAULT_CONFIG = {
   targetSizeLevel: 'auto',
   // 允许切超出视口比例上限的巨型容器（碎片按可见区域裁剪）。默认关闭，行为与旧版一致
   allowOversize: false,
+  // 显式目标选择器。非空时只按它找目标、忽略面积阈值（关卡玩法用）
+  targetSelector: '',
 };
 
 export const BASE_SELECTORS = [

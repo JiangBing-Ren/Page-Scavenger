@@ -1,0 +1,206 @@
+:root {
+  color-scheme: dark;
+  --bg: #0d1016;
+  --panel: #151a22;
+  --line: #242b36;
+  --text: #e9eef6;
+  --muted: #8593a5;
+  --accent: #00ffcc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.wrap {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+
+header.site {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+header.site b {
+  color: var(--text);
+  letter-spacing: 1px;
+}
+
+nav.site {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+}
+
+h1 {
+  margin: 22px 0 8px;
+  font-size: 24px;
+  letter-spacing: 1px;
+}
+
+.lead {
+  margin: 0 0 22px;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.thumb {
+  height: 88px;
+}
+
+.thumb.a {
+  background: linear-gradient(135deg, #1f6feb, #0b3b8c);
+}
+.thumb.b {
+  background: linear-gradient(135deg, #00b894, #045c4c);
+}
+.thumb.c {
+  background: linear-gradient(135deg, #b23b3b, #5c1414);
+}
+.thumb.d {
+  background: linear-gradient(135deg, #8e44ad, #3d1a52);
+}
+.thumb.e {
+  background: linear-gradient(135deg, #e67e22, #7a3f0c);
+}
+.thumb.f {
+  background: linear-gradient(135deg, #2c3e50, #101820);
+}
+
+.card .body {
+  padding: 10px 12px 14px;
+}
+
+.card h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.card p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.ad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #33210f, #4a2c12);
+  border: 1px solid #6b4419;
+  color: #ffd9a8;
+}
+
+.ad strong {
+  font-size: 15px;
+}
+
+.article {
+  margin: 18px 0;
+}
+
+.article h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.article p {
+  margin: 0 0 8px;
+  color: #c3cddb;
+}
+
+.panel {
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 14px;
+  background: #111722;
+  border: 1px solid var(--line);
+}
+
+.note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #1a212c;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.footer {
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: #5d6b7d;
+  font-size: 12px;
+}
+
+/* 关卡列表 */
+.levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.lv {
+  display: block;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.lv:hover {
+  border-color: #0aa47f;
+  transform: translateY(-2px);
+}
+
+.lv h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.lv p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lv .meta {
+  font-size: 11.5px;
+  color: #6c7a8c;
+}

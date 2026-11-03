@@ -1,10 +1,10 @@
-import { createCleaner } from '../../../core/src/engine.js';
+import { createCleaner } from '../../core/src/engine.js';
 import {
   SIZE_LEVELS,
   SIZE_LABELS,
   HIT_STOPS,
   HIT_STOP_LABELS,
-} from '../../../core/src/config.js';
+} from '../../core/src/config.js';
 
 const STORE_KEY = 'adslash.tutorial.marks';
 

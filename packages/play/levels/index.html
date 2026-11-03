@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>关卡 · 页面清道夫</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="site">
+        <b>页面清道夫</b>
+        <nav class="site"><span>关卡</span><span>规则</span></nav>
+      </header>
+
+      <h1>选择关卡</h1>
+      <p class="lead">
+        按住左键划过目标即可斩断，<b>贯穿</b>（从一侧进、另一侧出）才算命中。切中
+        <b>橙色条幅</b>与<b>推广卡片</b>得分，切到正文会扣分并清空连击。
+      </p>
+
+      <div class="levels">
+        <a class="lv" href="tutorial.html">
+          <h3>教程关</h3>
+          <p>五步学会基本操作：贯穿判定、尺寸挡位、顿感、松手再切。</p>
+          <div class="meta">不计分 · 约 2 分钟</div>
+        </a>
+
+        <a class="lv" href="ads-alley.html">
+          <h3>广告一条街</h3>
+          <p>一条贴满广告的街道，12 个目标混在正文之间。</p>
+          <div class="meta">限时 45 秒 · 目标分 300</div>
+        </a>
+
+        <a class="lv" href="card-grove.html">
+          <h3>卡片丛林</h3>
+          <p>大容器可以一刀多切，但里面埋着不能碰的正文。</p>
+          <div class="meta">限时 60 秒 · 目标分 400</div>
+        </a>
+      </div>
+
+      <h1 style="font-size: 16px; margin-top: 34px">计分规则</h1>
+      <div class="panel">
+        <p class="lead" style="margin-bottom: 10px">
+          基础分按目标面积分档（10 / 20 / 40 / 80），连击按
+          <b>第 n 刀 ×(1 + 0.25 × (n−1))</b> 递增，最高 3 倍；切到禁区每个 −25 分并清空连击；
+          通关按剩余时间给奖励（每秒 2 分）。
+        </p>
+        <p class="lead" style="margin: 0">
+          一刀切中容器时，容器内部的目标<b>全部计入</b>——所以「自动抓大」是把双刃剑。
+        </p>
+      </div>
+
+      <div class="footer">
+        <a href="../index.html" style="color: #8593a5">返回</a>
+      </div>
+    </div>
+  </body>
+</html>

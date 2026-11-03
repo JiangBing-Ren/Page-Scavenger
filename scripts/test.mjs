@@ -9,6 +9,14 @@ import { fileURLToPath } from 'node:url';
 import { getSplitPolygons, polygonArea } from '../packages/core/src/geometry.js';
 import { visibleBox } from '../packages/core/src/fragments.js';
 import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS } from '../packages/core/src/config.js';
+import {
+  basePointsForArea,
+  comboMultiplier,
+  decoyPenalty,
+  gradeFor,
+  scoreForSlash,
+  timeBonus,
+} from '../packages/core/src/score.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -82,7 +90,6 @@ await check('超大容器的可见区域裁剪', () => {
 });
 
 console.log('\n[2] 手感参数锁定');
-
 await check('关键数值与 v0.4.0 调优结果一致', () => {
   assert.equal(DEFAULT_CONFIG.trailLength, 25);
   assert.equal(DEFAULT_CONFIG.trailLifeMs, 160);
@@ -336,6 +343,60 @@ await check('打包产物里不残留 import/export 语句', async () => {
     assert.ok(!/^\s*import\s/m.test(code), `${rel} 残留 import`);
     assert.ok(!/^\s*export\s/m.test(code), `${rel} 残留 export`);
   }
+});
+
+console.log('\n[6] 关卡计分');
+
+await check('面积分档', () => {
+  assert.equal(basePointsForArea(10000), 10);
+  assert.equal(basePointsForArea(20000), 20);
+  assert.equal(basePointsForArea(100000), 40);
+  assert.equal(basePointsForArea(300000), 80);
+  assert.equal(basePointsForArea(0), 10);
+  assert.equal(basePointsForArea(NaN), 10);
+});
+
+await check('连击倍率与上限', () => {
+  assert.equal(comboMultiplier(1), 1);
+  assert.equal(comboMultiplier(2), 1.25);
+  assert.equal(comboMultiplier(5), 2);
+  assert.equal(comboMultiplier(9), 3);
+  assert.equal(comboMultiplier(25), 3, '倍率必须封顶 3');
+  assert.equal(comboMultiplier(0), 1);
+});
+
+await check('禁区扣分与时间奖励', () => {
+  assert.equal(decoyPenalty(0), 0);
+  assert.equal(decoyPenalty(2), 50);
+  assert.equal(decoyPenalty(-3), 0);
+  assert.equal(timeBonus(0), 0);
+  assert.equal(timeBonus(10), 20);
+  assert.equal(timeBonus(-5), 0);
+});
+
+await check('评级阈值', () => {
+  const t = { s: 560, a: 420, b: 300 };
+  assert.equal(gradeFor(600, t), 'S');
+  assert.equal(gradeFor(560, t), 'S');
+  assert.equal(gradeFor(500, t), 'A');
+  assert.equal(gradeFor(350, t), 'B');
+  assert.equal(gradeFor(100, t), 'C');
+  assert.equal(gradeFor(99999, {}), 'C', '缺阈值时不得误判为 S');
+});
+
+await check('单刀结算', () => {
+  const plain = scoreForSlash([20, 20], 1, 0);
+  assert.equal(plain.base, 40);
+  assert.equal(plain.total, 40);
+
+  const combo = scoreForSlash([20, 20], 3, 0);
+  assert.equal(combo.total, 60, '3 连击 1.5 倍');
+
+  const miss = scoreForSlash([], 1, 2);
+  assert.equal(miss.total, -50);
+
+  const mixed = scoreForSlash([40], 1, 1);
+  assert.equal(mixed.total, 15);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

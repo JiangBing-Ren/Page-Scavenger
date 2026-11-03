@@ -1,5 +1,5 @@
 import { BASE_SELECTORS, SKIP_TAGS } from './config.js';
-import { matchesAny } from './selector.js';
+import { matchesAny, safeMatches } from './selector.js';
 
 export function isTarget(el, env) {
   if (!el || el.nodeType !== 1) return false;
@@ -22,6 +22,23 @@ export function isTarget(el, env) {
 export function findSlashTarget(el, env) {
   const config = env.config;
   const level = config.targetSizeLevel;
+
+  // 关卡玩法：目标由页面显式声明，按选择器找最近的祖先，不受面积阈值影响
+  if (config.targetSelector) {
+    let node = el;
+    let depth = 0;
+    while (
+      node &&
+      node !== document.body &&
+      node !== document.documentElement &&
+      depth < config.maxAncestorDepth
+    ) {
+      if (node.nodeType === 1 && safeMatches(node, config.targetSelector)) return node;
+      node = node.parentElement;
+      depth++;
+    }
+    return null;
+  }
 
   let minArea = 2500;
   let limitW = window.innerWidth * config.maxTargetRatio;

@@ -167,21 +167,77 @@ function createWindow() {
   layoutView();
   loadWelcome();
 
-  // 开发自检：ADSLASH_SELFTEST=1 时自动激活并检查 canvas，用于无头环境验证注入链路
+  // 开发自检：ADSLASH_SELFTEST=1 时自动激活并检查注入链路；
+  // 配合 ADSLASH_SELFTEST_LEVEL=关卡名，还会模拟一次真实划动验证计分。
   if (process.env.ADSLASH_SELFTEST === '1') {
-    wc.once('did-finish-load', () => {
+    const level = process.env.ADSLASH_SELFTEST_LEVEL || '';
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    if (level) {
+      wc.loadFile(path.join(assetsDir(), 'play', 'levels', level + '.html')).catch(() => {});
+    }
+
+    wc.once('did-finish-load', async () => {
       wc.send('adslash:cmd', 'activate');
-      setTimeout(async () => {
-        try {
-          const result = await wc.executeJavaScript(
-            '(() => { const c = document.querySelector("canvas[data-adslash-ui]"); return c ? c.width + "x" + c.height : "none"; })()'
+      await sleep(1200);
+
+      try {
+        const base = await wc.executeJavaScript(
+          '(() => {' +
+            ' const canvasCount = document.querySelectorAll("canvas[data-adslash-ui]").length;' +
+            ' const hud = document.getElementById("cleaner-hud");' +
+            ' const targets = document.querySelectorAll("[data-target]").length;' +
+            ' return JSON.stringify({ canvasCount, hud: !!hud, targets });' +
+            '})()'
+        );
+        console.log('[selftest] ' + base);
+
+        if (level) {
+          const box = await wc.executeJavaScript(
+            '(() => {' +
+              ' const t = document.querySelector("[data-target]");' +
+              ' const r = t.getBoundingClientRect();' +
+              ' return JSON.stringify({ cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width });' +
+              '})()'
           );
-          console.log('[selftest] canvas=' + result);
-        } catch (e) {
-          console.log('[selftest] error=' + e.message);
+          const { cx, cy, w } = JSON.parse(box);
+          const y = Math.round(cy);
+          const x0 = Math.round(cx - w / 2 - 12);
+          const x1 = Math.round(cx + w / 2 + 12);
+
+          // sendInputEvent 在窗口未持续绘制时会被合并成 1~2 个 move，
+          // 这里直接在页面内合成 PointerEvent，验证「引擎 → 计分」链路
+          await wc.executeJavaScript(
+            '(() => {' +
+              ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+              ' if (!canvas) return "no-canvas";' +
+              ' const fire = (type, x, yy) => canvas.dispatchEvent(new PointerEvent(type, {' +
+              '   bubbles: true, cancelable: true, clientX: x, clientY: yy,' +
+              '   button: 0, buttons: type === "pointerup" ? 0 : 1, pointerType: "mouse" }));' +
+              ` const x0 = ${x0}, x1 = ${x1}, y = ${y};` +
+              ' fire("pointermove", x0, y);' +
+              ' fire("pointerdown", x0, y);' +
+              ' for (let x = x0; x <= x1; x += 6) fire("pointermove", x, y);' +
+              ' fire("pointerup", x1, y);' +
+              ' return "fired";' +
+              '})()'
+          );
+
+          await sleep(400);
+          const after = await wc.executeJavaScript(
+            '(() => {' +
+              ' const hud = document.getElementById("cleaner-hud");' +
+              ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
+              ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), probe: window.__probe });' +
+              '})()'
+          );
+          console.log('[selftest] after-slash ' + after);
         }
-        app.quit();
-      }, 1500);
+      } catch (e) {
+        console.log('[selftest] error=' + e.message);
+      }
+
+      app.quit();
     });
   }
 }
@@ -348,6 +404,11 @@ ipcMain.on('nav:reload', () => {
 });
 
 ipcMain.on('nav:home', () => loadWelcome());
+
+ipcMain.on('nav:levels', () => {
+  if (!view || view.webContents.isDestroyed()) return;
+  view.webContents.loadFile(path.join(assetsDir(), 'play', 'levels', 'index.html')).catch(() => {});
+});
 
 ipcMain.on('game:toggle', () => {
   if (view && !view.webContents.isDestroyed()) view.webContents.send('adslash:cmd', 'toggle');

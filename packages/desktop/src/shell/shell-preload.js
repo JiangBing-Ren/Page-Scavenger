@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('desktop', {
     back: () => ipcRenderer.send('nav:back'),
     reload: () => ipcRenderer.send('nav:reload'),
     home: () => ipcRenderer.send('nav:home'),
+    levels: () => ipcRenderer.send('nav:levels'),
   },
   game: {
     toggle: () => ipcRenderer.send('game:toggle'),

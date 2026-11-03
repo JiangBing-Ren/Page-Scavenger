@@ -174,18 +174,15 @@ async function main() {
       await writeBundle('packages/extension/src/popup/popup.js', `${host.dir}/popup/popup.js`)
     );
     results.push(
-      await writeBundle(
-        'packages/extension/src/levels/tutorial.js',
-        `${host.dir}/levels/tutorial.js`
-      )
+      await writeBundle('packages/play/src/runner.js', `${host.dir}/play/levels/runner.js`)
+    );
+    results.push(
+      await writeBundle('packages/play/src/tutorial.js', `${host.dir}/play/levels/tutorial.js`)
     );
 
     await copyFile('packages/extension/src/popup/popup.html', `${host.dir}/popup/popup.html`);
     await copyFile('packages/extension/src/popup/popup.css', `${host.dir}/popup/popup.css`);
-    await copyFile(
-      'packages/extension/src/levels/tutorial.html',
-      `${host.dir}/levels/tutorial.html`
-    );
+    await copyDir('packages/play/levels', `${host.dir}/play/levels`);
     await copyDir('packages/extension/icons', `${host.dir}/icons`);
     await writeManifest(host.manifest, host.dir);
   }
@@ -215,6 +212,15 @@ async function main() {
   for (const file of ['shell.html', 'shell.css', 'welcome.html', 'guide.html']) {
     await copyFile(`packages/desktop/src/shell/${file}`, `dist/desktop/shell/${file}`);
   }
+
+  // 桌面版也带关卡（与扩展共用同一份关卡内容）
+  results.push(
+    await writeBundle('packages/play/src/runner.js', 'dist/desktop/play/levels/runner.js')
+  );
+  results.push(
+    await writeBundle('packages/play/src/tutorial.js', 'dist/desktop/play/levels/tutorial.js')
+  );
+  await copyDir('packages/play/levels', 'dist/desktop/play/levels');
 
   for (const r of results) {
     console.log(`  ${String(r.bytes).padStart(7)} B  ${r.outRel}`);

@@ -3,7 +3,7 @@ const isFirefox = typeof browser !== 'undefined';
 
 const MSG_PREFIX = 'adslash:';
 const MENU_ID = 'adslash-toggle';
-const TUTORIAL_PATH = 'levels/tutorial.html';
+const TUTORIAL_PATH = 'play/levels/index.html';
 
 function setBadge(tabId, active) {
   if (typeof tabId !== 'number') return;

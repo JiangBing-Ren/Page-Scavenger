@@ -139,6 +139,7 @@ function animatePieces(pieceA, pieceB, nx, speedX, rotA, rotB, hitStop) {
 // 内层克隆保持元素真实尺寸并做负向偏移。
 function buildOversizePiece(el, rect, box, polygonStr, filterStr) {
   const wrapper = document.createElement('div');
+  wrapper.setAttribute('data-adslash-ui', '1');
   Object.assign(wrapper.style, baseStyleFor(box.left, box.top, box.width, box.height), {
     clipPath: `polygon(${polygonStr})`,
     filter: filterStr,
@@ -215,6 +216,7 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
   } else {
     pieceA = cloneForFragment(el);
     pieceA.removeAttribute('id');
+    pieceA.setAttribute('data-adslash-ui', '1');
     Object.assign(pieceA.style, baseStyleFor(box.left, box.top, w, h), {
       clipPath: `polygon(${pStrA})`,
       filter: filterStr,
@@ -224,6 +226,7 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
 
     pieceB = cloneForFragment(el);
     pieceB.removeAttribute('id');
+    pieceB.setAttribute('data-adslash-ui', '1');
     Object.assign(pieceB.style, baseStyleFor(box.left, box.top, w, h), {
       clipPath: `polygon(${pStrB})`,
       filter: filterStr,

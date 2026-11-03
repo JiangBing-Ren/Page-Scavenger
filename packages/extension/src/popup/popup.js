@@ -137,7 +137,7 @@ async function init() {
   });
 
   $('tutorial').addEventListener('click', () => {
-    ext.tabs.create({ url: ext.runtime.getURL('levels/tutorial.html') });
+    ext.tabs.create({ url: ext.runtime.getURL('play/levels/index.html') });
     window.close();
   });
 

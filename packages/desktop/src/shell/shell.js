@@ -54,6 +54,7 @@ addr.addEventListener('focus', () => addr.select());
 $('back').addEventListener('click', () => api.nav.back());
 $('reload').addEventListener('click', () => api.nav.reload());
 $('home').addEventListener('click', () => api.nav.home());
+$('levels').addEventListener('click', () => api.nav.levels());
 $('guide').addEventListener('click', () => api.ui.openGuide());
 toggleBtn.addEventListener('click', () => api.game.toggle());
 
