@@ -123,17 +123,72 @@ export function drawEffects(ctx, state) {
         let ex = 0;
         let ey = 0;
         if (len > 0) {
-          ex = (dx / len) * 20;
-          ey = (dy / len) * 20;
+          ex = (dx / len) * 26;
+          ey = (dy / len) * 26;
         }
 
+        const x1 = cut.entry.x - ex;
+        const y1 = cut.entry.y - ey;
+        const x2 = cut.hitPoint.x + ex;
+        const y2 = cut.hitPoint.y + ey;
+
+        ctx.strokeStyle = 'rgba(0, 255, 204, 0.26)';
+        ctx.lineWidth = 7;
         ctx.beginPath();
-        ctx.moveTo(cut.entry.x - ex, cut.entry.y - ey);
-        ctx.lineTo(cut.hitPoint.x + ex, cut.hitPoint.y + ey);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(180, 255, 245, 0.85)';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.beginPath();
+        ctx.arc(cut.hitPoint.x, cut.hitPoint.y, 3.2, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     ctx.restore();
+  }
+
+  if (state.shockwaves && state.shockwaves.length) {
+    for (let i = state.shockwaves.length - 1; i >= 0; i--) {
+      const w = state.shockwaves[i];
+      w.r += 16;
+      w.alpha -= 0.045;
+      if (w.alpha <= 0) {
+        state.shockwaves.splice(i, 1);
+        continue;
+      }
+      ctx.save();
+      ctx.strokeStyle = `rgba(150, 255, 240, ${w.alpha * 0.7})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  if (state.flashWhite > 0.01) {
+    ctx.save();
+    ctx.fillStyle = `rgba(255, 255, 255, ${state.flashWhite * 0.42})`;
+    ctx.fillRect(0, 0, state.cssW, state.cssH);
+    ctx.restore();
+
+    state.flashWhite *= 0.82;
+    if (state.flashWhite < 0.01) state.flashWhite = 0;
   }
 }
 

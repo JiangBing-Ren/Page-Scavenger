@@ -4,7 +4,6 @@ import {
   registerPiece,
   unregisterPiece,
   splitPolygon,
-  splitPolygonMany,
   screenToLocal,
 } from './pieces.js';
 
@@ -288,14 +287,44 @@ export function spawnMultiCutFragments(el, rect, cuts, hitStop) {
   }
   if (!localCuts.length) return false;
 
-  const polys = splitPolygonMany(base, localCuts, 0).filter((p) => polygonArea(p) >= MIN_PIECE_AREA);
-  if (polys.length < 2) return false;
+  // 按切割顺序分层：每块记录自己被第几刀切开，用于错峰炸开
+  let layers = [{ poly: base, depth: 0 }];
+  for (let i = 0; i < localCuts.length; i++) {
+    const cut = localCuts[i];
+    const next = [];
+    for (const item of layers) {
+      const { left, right } = splitPolygon(item.poly, cut.a, cut.dx, cut.dy);
+      const aOk = left.length >= 3 && polygonArea(left) > 0;
+      const bOk = right.length >= 3 && polygonArea(right) > 0;
 
-  const build = makeBuilder(el, rect, box, oversized, 'brightness(2.5) contrast(1.5)');
+      if (aOk && bOk) {
+        next.push({ poly: left, depth: i + 1 });
+        next.push({ poly: right, depth: i + 1 });
+      } else if (aOk) {
+        next.push({ poly: left, depth: item.depth });
+      } else if (bOk) {
+        next.push({ poly: right, depth: item.depth });
+      } else {
+        next.push(item);
+      }
+    }
+    layers = next;
+  }
+
+  const pieces = layers.filter((x) => polygonArea(x.poly) >= MIN_PIECE_AREA);
+  if (pieces.length < 2) return false;
+
+  const build = makeBuilder(
+    el,
+    rect,
+    box,
+    oversized,
+    'brightness(2.5) contrast(1.5) drop-shadow(0 0 8px rgba(0, 255, 204, 0.85))'
+  );
   const cx = box.width / 2;
   const cy = box.height / 2;
 
-  for (const poly of polys) {
+  for (const { poly, depth } of pieces) {
     const node = build(poly);
     registerPiece(node, {
       build,
@@ -316,7 +345,7 @@ export function spawnMultiCutFragments(el, rect, cuts, hitStop) {
       speedX: 110 + Math.random() * 130,
       rot: (Math.random() - 0.5) * 120,
       axis: Math.random() > 0.5 ? 1 : -1,
-      hitStop,
+      hitStop: hitStop + depth * 45,
     });
   }
 

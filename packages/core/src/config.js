@@ -37,6 +37,9 @@ export const DEFAULT_CONFIG = {
   targetSelector: '',
   // 连切：切下来的碎片还能被再次切开
   comboCut: true,
+  // 音效（Web Audio 现场合成，无音频文件）
+  soundEnabled: true,
+  soundVolume: 0.5,
 };
 
 export const BASE_SELECTORS = [

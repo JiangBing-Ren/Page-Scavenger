@@ -3,6 +3,7 @@ import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
 import { spawnSparks, spawnDOMFragments, spawnMultiCutFragments, reslicePiece } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
+import { createSound } from './sound.js';
 import {
   drawEffects,
   drawTargetBoxes,
@@ -24,6 +25,7 @@ export function createCleaner(options) {
   const onSlash = typeof opts.onSlash === 'function' ? opts.onSlash : () => {};
 
   const CONFIG = Object.assign({}, DEFAULT_CONFIG, opts.config || {});
+  const sound = createSound(() => CONFIG);
 
   const state = {
     active: false,
@@ -33,6 +35,9 @@ export function createCleaner(options) {
     lockedTargets: new Map(),
     flashes: [],
     particles: [],
+    shockwaves: [],
+    flashWhite: 0,
+    shake: 0,
     canvas: null,
     ctx: null,
     dpr: 1,
@@ -120,6 +125,7 @@ export function createCleaner(options) {
 
       spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
       spawnSparks(state.particles, rect, hitPoint, dir);
+      sound.slice(1);
 
       state.slashCount++;
       onSlash({ el, rect, count: state.slashCount });
@@ -148,6 +154,7 @@ export function createCleaner(options) {
     }
 
     rec.cuts.push({ entry, hitPoint, dir, flashTrail });
+    sound.slice(rec.cuts.length);
   }
 
   // 多刀炸开：按所有切线顺序切分，一次生成 N+1 块
@@ -173,6 +180,17 @@ export function createCleaner(options) {
       if (state.undoStack.length > 20) state.undoStack.shift();
 
       spawnMultiCutFragments(el, rect, cuts, CONFIG.hitStop);
+
+      // 次元斩：时间凝滞感 —— 白闪 + 震屏 + 冲击波
+      sound.burst();
+      state.flashWhite = 1;
+      state.shake = 1;
+      state.shockwaves.push({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        r: Math.max(rect.width, rect.height) * 0.18,
+        alpha: 1,
+      });
 
       const last = cuts[cuts.length - 1];
       spawnSparks(state.particles, rect, last.hitPoint, last.dir);
@@ -394,11 +412,22 @@ export function createCleaner(options) {
       }
     }
 
+    const shake = state.shake;
+    const shaking = shake > 0.01;
+    if (shaking) {
+      ctx.save();
+      ctx.translate((Math.random() - 0.5) * 12 * shake, (Math.random() - 0.5) * 12 * shake);
+    }
+
     drawTargetBoxes(ctx, state);
     drawEffects(ctx, state);
     drawTrail(ctx, state, CONFIG);
     updateParticles(ctx, state);
     drawCloseButton(ctx, state);
+
+    if (shaking) ctx.restore();
+    state.shake *= 0.86;
+    if (state.shake < 0.01) state.shake = 0;
 
     state.rafId = requestAnimationFrame(loop);
   }

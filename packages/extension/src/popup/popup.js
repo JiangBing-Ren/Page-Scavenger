@@ -52,6 +52,7 @@ function renderState(state) {
   $('autoMarks').checked = !!config.autoApplyMarks;
   $('oversize').checked = !!config.allowOversize;
   $('comboCut').checked = !!config.comboCut;
+  $('sound').checked = config.soundEnabled !== false;
 
   if (state && typeof state.markCount === 'number') {
     notice(`本域名已记录 ${state.markCount} 条清理规则`);
@@ -118,6 +119,9 @@ async function init() {
   );
   $('comboCut').addEventListener('change', (e) =>
     applyConfig({ comboCut: e.target.checked })
+  );
+  $('sound').addEventListener('change', (e) =>
+    applyConfig({ soundEnabled: e.target.checked })
   );
 
   $('undo').addEventListener('click', async () => {
