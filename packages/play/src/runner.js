@@ -38,33 +38,13 @@ const state = {
 let hud = null;
 let tickHandle = null;
 
+// 关卡必须可重玩：不持久化「切过的元素」，否则重进关卡时目标已被隐藏
 const storage = {
   async loadMarks() {
-    try {
-      const raw = localStorage.getItem('cleaner.marks');
-      const all = raw ? JSON.parse(raw) : {};
-      const list = all[location.pathname];
-      return Array.isArray(list) ? list : [];
-    } catch (e) {
-      return [];
-    }
+    return [];
   },
-  saveMarks(list) {
-    try {
-      const raw = localStorage.getItem('cleaner.marks');
-      const all = raw ? JSON.parse(raw) : {};
-      all[location.pathname] = list.slice(-100);
-      localStorage.setItem('cleaner.marks', JSON.stringify(all));
-    } catch (e) {}
-  },
-  clearMarks() {
-    try {
-      const raw = localStorage.getItem('cleaner.marks');
-      const all = raw ? JSON.parse(raw) : {};
-      delete all[location.pathname];
-      localStorage.setItem('cleaner.marks', JSON.stringify(all));
-    } catch (e) {}
-  },
+  saveMarks() {},
+  clearMarks() {},
 };
 
 function readBest() {
@@ -279,7 +259,7 @@ function showResult({ reason, bonus, grade, best }) {
 
 const cleaner = createCleaner({
   storage,
-  config: { targetSelector: '[data-target],[data-decoy]' },
+  config: { targetSelector: '[data-target],[data-decoy]', autoApplyMarks: false },
   onSlash: handleSlash,
 });
 
@@ -297,3 +277,11 @@ hud.querySelector('[data-act="toggle"]').addEventListener('click', () => {
 });
 
 cleaner.activate();
+
+// 调试钩子：仅存在于本项目的关卡页面，供无人值守自检读取状态
+window.__levelDebug = () => ({
+  score: state.score,
+  remain: state.remaining,
+  finished: state.finished,
+  engine: cleaner.getDebugState ? cleaner.getDebugState() : null,
+});

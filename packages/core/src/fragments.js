@@ -1,6 +1,12 @@
 import { MEDIA_SELECTOR } from './config.js';
 import { getSplitPolygons, polygonArea } from './geometry.js';
-import { registerPiece, unregisterPiece, splitPolygon, screenToLocal } from './pieces.js';
+import {
+  registerPiece,
+  unregisterPiece,
+  splitPolygon,
+  splitPolygonMany,
+  screenToLocal,
+} from './pieces.js';
 
 // 再切后单块面积下限，低于它就不再分，避免无限碎片
 const MIN_PIECE_AREA = 60;
@@ -243,6 +249,88 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
 
   animate(pieceA, { nx, speedX, rot: rotA, axis: 1, hitStop });
   animate(pieceB, { nx: -nx, speedX, rot: rotB, axis: -1, hitStop });
+}
+
+// 多刀炸开：按所有切线顺序切分，松手瞬间一次性散成 N+1 块（次元斩）
+export function spawnMultiCutFragments(el, rect, cuts, hitStop) {
+  if (!Array.isArray(cuts) || !cuts.length) return false;
+
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) {
+    box = visibleBox(rect);
+    if (box.width < 4 || box.height < 4) return false;
+  }
+
+  const base = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ];
+
+  const localCuts = [];
+  for (const cut of cuts) {
+    let ax = cut.entry.x - box.left;
+    let ay = cut.entry.y - box.top;
+    if (oversized) {
+      ax = Math.min(Math.max(ax, 0), box.width);
+      ay = Math.min(Math.max(ay, 0), box.height);
+    }
+
+    let dx = cut.hitPoint.x - cut.entry.x;
+    let dy = cut.hitPoint.y - cut.entry.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+
+    localCuts.push({ a: { x: ax, y: ay }, dx: dx / len, dy: dy / len });
+  }
+  if (!localCuts.length) return false;
+
+  const polys = splitPolygonMany(base, localCuts, 0).filter((p) => polygonArea(p) >= MIN_PIECE_AREA);
+  if (polys.length < 2) return false;
+
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(2.5) contrast(1.5)');
+  const cx = box.width / 2;
+  const cy = box.height / 2;
+
+  for (const poly of polys) {
+    const node = build(poly);
+    registerPiece(node, {
+      build,
+      box,
+      polygon: poly,
+      screenCache: null,
+      bornAt: performance.now(),
+    });
+
+    let vx = polyCenter(poly).x - cx;
+    let vy = polyCenter(poly).y - cy;
+    const dist = Math.hypot(vx, vy) || 1;
+    vx /= dist;
+    vy /= dist;
+
+    animate(node, {
+      nx: vx,
+      speedX: 110 + Math.random() * 130,
+      rot: (Math.random() - 0.5) * 120,
+      axis: Math.random() > 0.5 ? 1 : -1,
+      hitStop,
+    });
+  }
+
+  return true;
+}
+
+function polyCenter(poly) {
+  let sx = 0;
+  let sy = 0;
+  for (const p of poly) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / poly.length, y: sy / poly.length };
 }
 
 // 连切：把一块碎片沿新的刀线再分成两块，子块从父块的当前姿态继续飞

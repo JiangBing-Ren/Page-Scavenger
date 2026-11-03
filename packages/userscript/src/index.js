@@ -156,7 +156,7 @@ function injectUI() {
       });
 
       addItem(
-        config.executeOnRelease ? '⏳ 松手再切除：开启 (预锁定)' : '⚡ 松手再切除：关闭 (即切)',
+        config.executeOnRelease ? '⏳ 多刀蓄力：开启 (松手炸开)' : '⚡ 多刀蓄力：关闭 (即切)',
         () => cleaner.setConfig({ executeOnRelease: !config.executeOnRelease })
       );
 

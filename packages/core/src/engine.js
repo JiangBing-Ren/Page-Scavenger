@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG, SIZE_LEVELS } from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
-import { spawnSparks, spawnDOMFragments, reslicePiece } from './fragments.js';
+import { spawnSparks, spawnDOMFragments, spawnMultiCutFragments, reslicePiece } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import {
   drawEffects,
@@ -131,6 +131,62 @@ export function createCleaner(options) {
     state.pending.delete(el);
   }
 
+  // 累积一刀。同一目标可反复叠，松手后一次性切开
+  function addCut(el, entry, hitPoint, dir, flashTrail) {
+    let rec = state.lockedTargets.get(el);
+    if (!rec) {
+      rec = { rect: el.getBoundingClientRect(), cuts: [] };
+      state.lockedTargets.set(el, rec);
+    }
+
+    if (rec.cuts.length >= CONFIG.maxCutsPerTarget) return;
+
+    const last = rec.cuts[rec.cuts.length - 1];
+    if (last) {
+      const gap = Math.hypot(hitPoint.x - last.hitPoint.x, hitPoint.y - last.hitPoint.y);
+      if (gap < CONFIG.minCutGap) return;
+    }
+
+    rec.cuts.push({ entry, hitPoint, dir, flashTrail });
+  }
+
+  // 多刀炸开：按所有切线顺序切分，一次生成 N+1 块
+  function multiSlash(el, cuts) {
+    if (!el || state.pending.has(el) || state.slashed.has(el)) return;
+
+    state.pending.add(el);
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) {
+      state.pending.delete(el);
+      return;
+    }
+
+    const sel = cssPath(el);
+    const prevStyle = el.getAttribute('style');
+
+    try {
+      hideEl(el);
+      state.slashed.add(el);
+      if (sel) addMark(sel);
+
+      state.undoStack.push({ sel, prevStyle });
+      if (state.undoStack.length > 20) state.undoStack.shift();
+
+      spawnMultiCutFragments(el, rect, cuts, CONFIG.hitStop);
+
+      const last = cuts[cuts.length - 1];
+      spawnSparks(state.particles, rect, last.hitPoint, last.dir);
+
+      state.slashCount++;
+      onSlash({ el, rect, count: state.slashCount, cuts: cuts.length });
+    } catch (e) {
+      console.error(e);
+      hideEl(el);
+    }
+
+    state.pending.delete(el);
+  }
+
   function checkHits(x, y) {
     checkDomHits(x, y);
     if (CONFIG.comboCut) checkPieceHits(x, y);
@@ -166,11 +222,6 @@ export function createCleaner(options) {
 
   function checkDomHits(x, y) {
     for (const [el, entry] of state.activeHits.entries()) {
-      if (state.lockedTargets.has(el)) {
-        state.activeHits.delete(el);
-        continue;
-      }
-
       const rect = el.getBoundingClientRect();
 
       if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
@@ -187,12 +238,7 @@ export function createCleaner(options) {
           }
 
           if (CONFIG.executeOnRelease) {
-            state.lockedTargets.set(el, {
-              entry: { x: entry.x, y: entry.y },
-              hitPoint,
-              dir,
-              flashTrail,
-            });
+            addCut(el, { x: entry.x, y: entry.y }, hitPoint, dir, flashTrail);
           } else {
             slash(el, hitPoint, dir, { x: entry.x, y: entry.y }, flashTrail);
           }
@@ -222,12 +268,12 @@ export function createCleaner(options) {
 
     const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
     const target = findSlashTarget(hit, env);
+    // 已锁定的目标允许再次进入：这就是叠刀
     if (
       !target ||
       state.pending.has(target) ||
       state.slashed.has(target) ||
-      state.activeHits.has(target) ||
-      state.lockedTargets.has(target)
+      state.activeHits.has(target)
     ) {
       return;
     }
@@ -305,9 +351,15 @@ export function createCleaner(options) {
 
       let delay = 0;
       for (let i = 0; i < targets.length; i++) {
-        const [el, data] = targets[i];
+        const [el, rec] = targets[i];
         setTimeout(() => {
-          slash(el, data.hitPoint, data.dir, data.entry, data.flashTrail);
+          if (!rec.cuts.length) return;
+          if (rec.cuts.length === 1) {
+            const c = rec.cuts[0];
+            slash(el, c.hitPoint, c.dir, c.entry, c.flashTrail);
+          } else {
+            multiSlash(el, rec.cuts);
+          }
         }, delay);
         delay += Math.max(50, 150 / (i + 1));
       }
@@ -592,6 +644,14 @@ export function createCleaner(options) {
     clearMarks,
     getMarkCount: () => state.marks.length,
     getSlashCount: () => state.slashCount,
+    // 调试/自检用：不参与游戏逻辑
+    getDebugState: () => ({
+      active: state.active,
+      drawing: state.isDrawing,
+      activeHits: state.activeHits.size,
+      locked: state.lockedTargets.size,
+      cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),
+    }),
     destroy,
   };
 }

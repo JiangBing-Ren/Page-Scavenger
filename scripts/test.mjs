@@ -18,7 +18,7 @@ import {
   timeBonus,
 } from '../packages/core/src/score.js';
 import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
-import { splitPolygon } from '../packages/core/src/pieces.js';
+import { splitPolygon, splitPolygonMany } from '../packages/core/src/pieces.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -464,6 +464,35 @@ await check('刀线完全在碎片外侧时只产生一块', () => {
   const { left, right } = splitPolygon(SQUARE, { x: 0, y: -50 }, 1, 0);
   assert.equal(right.length, 0);
   assert.ok(Math.abs(polygonArea(left) - 10000) < 0.01);
+});
+
+console.log('\n[9] 多刀蓄力');
+
+await check('两条互相垂直的刀线切成 4 块', () => {
+  const cuts = [
+    { a: { x: 0, y: 50 }, dx: 1, dy: 0 },
+    { a: { x: 50, y: 0 }, dx: 0, dy: 1 },
+  ];
+  const polys = splitPolygonMany(SQUARE, cuts, 0);
+  assert.equal(polys.length, 4);
+  const total = polys.reduce((sum, p) => sum + polygonArea(p), 0);
+  assert.ok(Math.abs(total - 10000) < 0.01);
+});
+
+await check('三条平行刀线切成 4 块且面积正确', () => {
+  const cuts = [10, 30, 70].map((y) => ({ a: { x: 0, y }, dx: 1, dy: 0 }));
+  const polys = splitPolygonMany(SQUARE, cuts, 0);
+  assert.equal(polys.length, 4);
+  const areas = polys.map(polygonArea).sort((a, b) => a - b);
+  assert.deepEqual(
+    areas.map((a) => Math.round(a)),
+    [1000, 2000, 3000, 4000]
+  );
+});
+
+await check('刀线在碎片外部时不增加块数', () => {
+  const polys = splitPolygonMany(SQUARE, [{ a: { x: 0, y: -50 }, dx: 1, dy: 0 }], 0);
+  assert.equal(polys.length, 1);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

@@ -114,21 +114,24 @@ export function drawEffects(ctx, state) {
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 4]);
 
-    for (const [, data] of state.lockedTargets.entries()) {
-      const dx = data.hitPoint.x - data.entry.x;
-      const dy = data.hitPoint.y - data.entry.y;
-      const len = Math.hypot(dx, dy);
-      let ex = 0;
-      let ey = 0;
-      if (len > 0) {
-        ex = (dx / len) * 20;
-        ey = (dy / len) * 20;
-      }
+    for (const [, rec] of state.lockedTargets.entries()) {
+      const cuts = rec && rec.cuts ? rec.cuts : [];
+      for (const cut of cuts) {
+        const dx = cut.hitPoint.x - cut.entry.x;
+        const dy = cut.hitPoint.y - cut.entry.y;
+        const len = Math.hypot(dx, dy);
+        let ex = 0;
+        let ey = 0;
+        if (len > 0) {
+          ex = (dx / len) * 20;
+          ey = (dy / len) * 20;
+        }
 
-      ctx.beginPath();
-      ctx.moveTo(data.entry.x - ex, data.entry.y - ey);
-      ctx.lineTo(data.hitPoint.x + ex, data.hitPoint.y + ey);
-      ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cut.entry.x - ex, cut.entry.y - ey);
+        ctx.lineTo(cut.hitPoint.x + ex, cut.hitPoint.y + ey);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }

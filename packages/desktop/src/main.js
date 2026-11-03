@@ -216,15 +216,64 @@ function createWindow() {
               '   bubbles: true, cancelable: true, clientX: x, clientY: yy,' +
               '   button: 0, buttons: type === "pointerup" ? 0 : 1, pointerType: "mouse" }));' +
               ` const x0 = ${x0}, x1 = ${x1}, y = ${y};` +
+              ` const cx = ${Math.round(cx)};` +
               ' fire("pointermove", x0, y);' +
               ' fire("pointerdown", x0, y);' +
-              ' for (let x = x0; x <= x1; x += 6) fire("pointermove", x, y);' +
-              ' fire("pointerup", x1, y);' +
-              ' return "fired";' +
+              ' for (let x = x0; x <= cx; x += 6) fire("pointermove", x, y);' +
+              ' return "half";' +
               '})()'
           );
 
-          await sleep(160);
+          console.log(
+            '[selftest] mid-drag ' +
+              (await wc.executeJavaScript(
+                'JSON.stringify((() => {' +
+                  ` const cx = ${Math.round(cx)}, cy = ${Math.round(cy)};` +
+                  ' const hit = document.elementFromPoint(cx, cy);' +
+                  ' const t = document.querySelector("[data-target]");' +
+                  ' const r = t.getBoundingClientRect();' +
+                  ' return {' +
+                  '   debug: window.__levelDebug ? window.__levelDebug() : null,' +
+                  '   tagAtCenter: hit ? hit.tagName + "." + (hit.className || "") : "none",' +
+                  '   stack: document.elementsFromPoint(cx, cy).slice(0, 6).map((n) => n.tagName + "." + (n.className || "")),' +
+                  '   targetRect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],' +
+                  '   targetTag: t.tagName + "." + (t.className || ""),' +
+                  ' };' +
+                  '})())'
+              ))
+          );
+
+          await wc.executeJavaScript(
+            '(() => {' +
+              ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+              ' const fire = (type, x, yy) => canvas.dispatchEvent(new PointerEvent(type, {' +
+              '   bubbles: true, cancelable: true, clientX: x, clientY: yy,' +
+              '   button: 0, buttons: type === "pointerup" ? 0 : 1, pointerType: "mouse" }));' +
+              ` const x0 = ${x0}, x1 = ${x1}, y = ${y}, cx = ${Math.round(cx)};` +
+              ' for (const yy of [y - 20, y, y + 20]) {' +
+              '   fire("pointermove", x0, yy);' +
+              '   for (let x = x0; x <= x1; x += 6) fire("pointermove", x, yy);' +
+              ' }' +
+              ' return "moved";' +
+              '})()'
+          );
+
+          console.log(
+            '[selftest] before-release ' +
+              (await wc.executeJavaScript(
+                'JSON.stringify(window.__levelDebug ? window.__levelDebug() : null)'
+              ))
+          );
+
+          await wc.executeJavaScript(
+            '(() => {' +
+              ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+              ` canvas.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, clientX: ${x1}, clientY: ${y}, button: 0, buttons: 0, pointerType: "mouse" }));` +
+              ' return "released";' +
+              '})()'
+          );
+
+          await sleep(200);
           const snap = async () =>
             wc.executeJavaScript(
               '(() => {' +

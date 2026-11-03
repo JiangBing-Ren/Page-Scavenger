@@ -1,5 +1,6 @@
 // 碎片注册表：让碎片自己也能被再次切开。
 // 每块碎片记录「局部多边形 + 基础矩形 + 重建函数」，重切时把屏幕刀线逆变换回局部坐标。
+import { polygonArea } from './geometry.js';
 
 const registry = new Map();
 let seq = 0;
@@ -123,4 +124,24 @@ export function piecesAt(x, y, now) {
 
 export function getPiece(id) {
   return registry.get(id);
+}
+
+// 顺序切割：每条刀线作用于当前所有块，得到 N+1 块（次元斩的几何基础）
+export function splitPolygonMany(polygon, cuts, minArea) {
+  const limit = Number.isFinite(minArea) ? minArea : 0;
+  let pieces = [polygon];
+
+  for (const cut of cuts) {
+    const next = [];
+    for (const poly of pieces) {
+      const { left, right } = splitPolygon(poly, cut.a, cut.dx, cut.dy);
+
+      if (left.length >= 3 && polygonArea(left) > 0) next.push(left);
+      if (right.length >= 3 && polygonArea(right) > 0) next.push(right);
+    }
+    pieces = next;
+    if (pieces.length === 0) break;
+  }
+
+  return pieces.filter((p) => polygonArea(p) >= limit);
 }

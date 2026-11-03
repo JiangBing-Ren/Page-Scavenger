@@ -18,8 +18,12 @@ export const DEFAULT_CONFIG = {
   // 指针从目标一侧移入、从另一侧移出才算贯穿（相对于目标尺寸的比例）
   pierceRatio: 0.6,
 
-  // 松手再切除（预锁定 + 留痕）
-  executeOnRelease: false,
+  // 松手再切除（预锁定 + 留痕）；开启后同一目标可反复叠刀，松手一次性炸开
+  executeOnRelease: true,
+  // 单目标最多累积多少刀
+  maxCutsPerTarget: 10,
+  // 两次叠刀之间的最小位移，避免原地抖动重复记线
+  minCutGap: 18,
   // 顿感：命中后碎片分离前的停顿，0 为关闭
   hitStop: 40,
 
