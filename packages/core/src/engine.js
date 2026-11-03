@@ -58,6 +58,48 @@ export function createCleaner(options) {
 
   let saveTimer = null;
 
+  // 叠刀抬升：目标被斩超过 3 刀后抬起并放大
+  const lifted = new Map();
+
+  function applyLift(el, scale, dy) {
+    if (lifted.has(el)) {
+      el.style.transform = `translateY(${dy}px) scale(${scale})`;
+      return;
+    }
+
+    let computed = 'none';
+    try {
+      computed = window.getComputedStyle(el).transform;
+    } catch (e) {}
+
+    // 站点自己用了 transform 就不碰，避免破坏布局
+    if (computed !== 'none') return;
+
+    lifted.set(el, {
+      transform: el.style.transform || '',
+      transition: el.style.transition || '',
+      origin: el.style.transformOrigin || '',
+    });
+    el.style.transformOrigin = 'center center';
+    el.style.transition = 'transform 0.18s ease-out';
+    el.style.transform = `translateY(${dy}px) scale(${scale})`;
+  }
+
+  function releaseLift(el) {
+    if (!lifted.has(el)) return;
+    const prev = lifted.get(el);
+    lifted.delete(el);
+    try {
+      el.style.transition = prev.transition;
+      el.style.transformOrigin = prev.origin;
+      el.style.transform = prev.transform;
+    } catch (e) {}
+  }
+
+  function releaseAllLifts() {
+    for (const el of Array.from(lifted.keys())) releaseLift(el);
+  }
+
   const saveMarks = () => {
     if (!storage || typeof storage.saveMarks !== 'function') return;
     if (saveTimer) clearTimeout(saveTimer);
@@ -119,6 +161,7 @@ export function createCleaner(options) {
     try {
       hideEl(el);
       state.slashed.add(el);
+      releaseLift(el);
       if (sel) addMark(sel);
       state.undoStack.push(record);
       if (state.undoStack.length > 20) state.undoStack.shift();
@@ -155,6 +198,13 @@ export function createCleaner(options) {
 
     rec.cuts.push({ entry, hitPoint, dir, flashTrail });
     sound.slice(rec.cuts.length);
+
+    // 超过 3 刀开始抬起放大，刀越多越明显
+    const over = rec.cuts.length;
+    if (over > 3) {
+      const strong = over >= 7;
+      applyLift(el, strong ? 1.08 : 1.05, strong ? -16 : -10);
+    }
   }
 
   // 多刀炸开：按所有切线顺序切分，一次生成 N+1 块
@@ -174,6 +224,7 @@ export function createCleaner(options) {
     try {
       hideEl(el);
       state.slashed.add(el);
+      releaseLift(el);
       if (sel) addMark(sel);
 
       state.undoStack.push({ sel, prevStyle });
@@ -181,10 +232,8 @@ export function createCleaner(options) {
 
       spawnMultiCutFragments(el, rect, cuts, CONFIG.hitStop);
 
-      // 次元斩：时间凝滞感 —— 白闪 + 震屏 + 冲击波
+      // 冲击波留在每个目标上（局部效果），整屏白闪与震屏统一在松手时触发
       sound.burst();
-      state.flashWhite = 1;
-      state.shake = 1;
       state.shockwaves.push({
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
@@ -323,6 +372,7 @@ export function createCleaner(options) {
     state.isDrawing = true;
     state.activeHits.clear();
     state.pieceHits.clear();
+    releaseAllLifts();
     state.lockedTargets.clear();
 
     const pt = { x: e.clientX, y: e.clientY, t: now() };
@@ -366,6 +416,10 @@ export function createCleaner(options) {
     if (CONFIG.executeOnRelease && state.lockedTargets.size > 0) {
       const targets = Array.from(state.lockedTargets.entries());
       state.lockedTargets.clear();
+
+      // 整屏效果只在「斩完」这一刻触发一次
+      state.flashWhite = 1;
+      state.shake = 1;
 
       let delay = 0;
       for (let i = 0; i < targets.length; i++) {
@@ -568,6 +622,7 @@ export function createCleaner(options) {
 
     state.active = false;
     stopObserver();
+    releaseAllLifts();
     destroyCanvas();
 
     onStateChange(false);
