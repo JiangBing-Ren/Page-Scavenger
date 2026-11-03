@@ -278,7 +278,8 @@ export function createCleaner(options) {
   }
 
   function onWheel(e) {
-    if (state.active) e.preventDefault();
+    // 只在按住左键划线时屏蔽滚动，否则长页面根本没法往下看
+    if (state.active && state.isDrawing) e.preventDefault();
   }
 
   function onKeyDown(e) {

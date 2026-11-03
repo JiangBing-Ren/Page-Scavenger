@@ -79,10 +79,92 @@ function cloneForFragment(el) {
   return clone;
 }
 
-export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
-  const w = rect.width;
-  const h = rect.height;
+function baseStyleFor(left, top, width, height) {
+  return {
+    position: 'fixed',
+    left: left + 'px',
+    top: top + 'px',
+    width: width + 'px',
+    height: height + 'px',
+    margin: '0',
+    boxSizing: 'border-box',
+    pointerEvents: 'none',
+    zIndex: '2147483645',
+    transformOrigin: 'center center',
+    overflow: 'hidden',
+    willChange: 'transform, opacity',
+  };
+}
 
+export function visibleBox(rect) {
+  const left = Math.max(rect.left, 0);
+  const top = Math.max(rect.top, 0);
+  const right = Math.min(rect.right, window.innerWidth);
+  const bottom = Math.min(rect.bottom, window.innerHeight);
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+function animatePieces(pieceA, pieceB, nx, speedX, rotA, rotB, hitStop) {
+  setTimeout(() => {
+    const trans =
+      'transform 1.2s cubic-bezier(0.3, 0.1, 0.6, 1), opacity 0.6s ease-in 0.6s, filter 0.2s';
+
+    Object.assign(pieceA.style, {
+      transition: trans,
+      transform: `translate3d(${nx * speedX}px, 600px, 0) rotate3d(1, 1, 0, ${rotA}deg)`,
+      opacity: '0',
+      filter: 'none',
+    });
+
+    Object.assign(pieceB.style, {
+      transition: trans,
+      transform: `translate3d(${-nx * speedX}px, 600px, 0) rotate3d(1, -1, 0, ${rotB}deg)`,
+      opacity: '0',
+      filter: 'none',
+    });
+
+    setTimeout(() => {
+      if (pieceA.parentNode) pieceA.parentNode.removeChild(pieceA);
+      if (pieceB.parentNode) pieceB.parentNode.removeChild(pieceB);
+    }, 1500);
+  }, hitStop);
+}
+
+// 超大元素：只切可见的那一块。外面套一层按可见区域裁剪的容器，
+// 内层克隆保持元素真实尺寸并做负向偏移。
+function buildOversizePiece(el, rect, box, polygonStr, filterStr) {
+  const wrapper = document.createElement('div');
+  Object.assign(wrapper.style, baseStyleFor(box.left, box.top, box.width, box.height), {
+    clipPath: `polygon(${polygonStr})`,
+    filter: filterStr,
+    background: 'transparent',
+  });
+
+  const clone = cloneForFragment(el);
+  clone.removeAttribute('id');
+  Object.assign(clone.style, {
+    position: 'fixed',
+    left: rect.left - box.left + 'px',
+    top: rect.top - box.top + 'px',
+    width: rect.width + 'px',
+    height: rect.height + 'px',
+    margin: '0',
+    boxSizing: 'border-box',
+    pointerEvents: 'none',
+  });
+  clone.style.setProperty('visibility', 'visible', 'important');
+
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  return wrapper;
+}
+
+export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
   if (!entryPoint) return;
 
   let dx = dir.x;
@@ -96,44 +178,59 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
     dy /= len;
   }
 
-  const a = { x: entryPoint.x - rect.left, y: entryPoint.y - rect.top };
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) {
+    box = visibleBox(rect);
+    if (box.width < 4 || box.height < 4) return;
+  }
+
+  let ax = entryPoint.x - box.left;
+  let ay = entryPoint.y - box.top;
+  if (oversized) {
+    ax = Math.min(Math.max(ax, 0), box.width);
+    ay = Math.min(Math.max(ay, 0), box.height);
+  }
+  const a = { x: ax, y: ay };
+
+  const w = box.width;
+  const h = box.height;
 
   const { polyA, polyB } = getSplitPolygons(w, h, a, dx, dy);
   if (polyA.length < 3 || polyB.length < 3) return;
 
-  const toPolygon = (poly) =>
-    poly.map((p) => `${p.x.toFixed(1)}px ${p.y.toFixed(1)}px`).join(',');
+  const toPolygon = (poly) => poly.map((p) => `${p.x.toFixed(1)}px ${p.y.toFixed(1)}px`).join(',');
   const pStrA = toPolygon(polyA);
   const pStrB = toPolygon(polyB);
 
-  const baseStyle = {
-    position: 'fixed',
-    left: rect.left + 'px',
-    top: rect.top + 'px',
-    width: w + 'px',
-    height: h + 'px',
-    margin: '0',
-    boxSizing: 'border-box',
-    pointerEvents: 'none',
-    zIndex: '2147483645',
-    transformOrigin: 'center center',
-    overflow: 'hidden',
-    willChange: 'transform, opacity',
-  };
-
   const filterStr = 'brightness(2.5) contrast(1.5)';
 
-  const cloneA = cloneForFragment(el);
-  cloneA.removeAttribute('id');
-  Object.assign(cloneA.style, baseStyle, { clipPath: `polygon(${pStrA})`, filter: filterStr });
-  cloneA.style.setProperty('visibility', 'visible', 'important');
-  document.body.appendChild(cloneA);
+  let pieceA;
+  let pieceB;
 
-  const cloneB = cloneForFragment(el);
-  cloneB.removeAttribute('id');
-  Object.assign(cloneB.style, baseStyle, { clipPath: `polygon(${pStrB})`, filter: filterStr });
-  cloneB.style.setProperty('visibility', 'visible', 'important');
-  document.body.appendChild(cloneB);
+  if (oversized) {
+    pieceA = buildOversizePiece(el, rect, box, pStrA, filterStr);
+    pieceB = buildOversizePiece(el, rect, box, pStrB, filterStr);
+  } else {
+    pieceA = cloneForFragment(el);
+    pieceA.removeAttribute('id');
+    Object.assign(pieceA.style, baseStyleFor(box.left, box.top, w, h), {
+      clipPath: `polygon(${pStrA})`,
+      filter: filterStr,
+    });
+    pieceA.style.setProperty('visibility', 'visible', 'important');
+    document.body.appendChild(pieceA);
+
+    pieceB = cloneForFragment(el);
+    pieceB.removeAttribute('id');
+    Object.assign(pieceB.style, baseStyleFor(box.left, box.top, w, h), {
+      clipPath: `polygon(${pStrB})`,
+      filter: filterStr,
+    });
+    pieceB.style.setProperty('visibility', 'visible', 'important');
+    document.body.appendChild(pieceB);
+  }
 
   const nx = -dy;
   const ny = dx;
@@ -141,26 +238,5 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
   const rotA = (Math.random() - 0.5) * 90;
   const rotB = (Math.random() - 0.5) * 90;
 
-  setTimeout(() => {
-    const trans = 'transform 1.2s cubic-bezier(0.3, 0.1, 0.6, 1), opacity 0.6s ease-in 0.6s, filter 0.2s';
-
-    Object.assign(cloneA.style, {
-      transition: trans,
-      transform: `translate3d(${nx * speedX}px, 600px, 0) rotate3d(1, 1, 0, ${rotA}deg)`,
-      opacity: '0',
-      filter: 'none',
-    });
-
-    Object.assign(cloneB.style, {
-      transition: trans,
-      transform: `translate3d(${-nx * speedX}px, 600px, 0) rotate3d(1, -1, 0, ${rotB}deg)`,
-      opacity: '0',
-      filter: 'none',
-    });
-
-    setTimeout(() => {
-      if (cloneA.parentNode) cloneA.parentNode.removeChild(cloneA);
-      if (cloneB.parentNode) cloneB.parentNode.removeChild(cloneB);
-    }, 1500);
-  }, hitStop);
+  animatePieces(pieceA, pieceB, nx, speedX, rotA, rotB, hitStop);
 }

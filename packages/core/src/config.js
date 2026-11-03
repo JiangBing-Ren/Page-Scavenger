@@ -27,6 +27,8 @@ export const DEFAULT_CONFIG = {
   forceMode: true,
   // auto | balance | large | medium | small
   targetSizeLevel: 'auto',
+  // 允许切超出视口比例上限的巨型容器（碎片按可见区域裁剪）。默认关闭，行为与旧版一致
+  allowOversize: false,
 };
 
 export const BASE_SELECTORS = [

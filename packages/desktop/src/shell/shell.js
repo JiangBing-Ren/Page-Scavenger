@@ -68,6 +68,11 @@ onRelease.addEventListener('change', () =>
 );
 force.addEventListener('change', () => api.game.setConfig({ forceMode: force.checked }));
 
+const oversize = $('oversize');
+oversize.addEventListener('change', () =>
+  api.game.setConfig({ allowOversize: oversize.checked })
+);
+
 // 主进程推送
 api.on.nav((patch) => {
   if (patch.url !== undefined && document.activeElement !== addr) addr.value = prettyUrl(patch.url);
@@ -91,6 +96,7 @@ api.on.game((state) => {
   }
   onRelease.checked = !!config.executeOnRelease;
   force.checked = !!config.forceMode;
+  oversize.checked = !!config.allowOversize;
 });
 
 addr.focus();

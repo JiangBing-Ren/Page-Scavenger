@@ -58,7 +58,12 @@ export function findSlashTarget(el, env) {
       const area = r.width * r.height;
 
       if (r.width > 2 && r.height > 2 && area >= minArea) {
-        if (r.width > limitW || r.height > limitH) break;
+        if (r.width > limitW || r.height > limitH) {
+          // 没有更合适的目标时，allowOversize 会退回切这个巨型容器，
+          // 碎片在 fragments 里按可见区域裁剪
+          if (config.allowOversize && !best) best = cur;
+          break;
+        }
 
         const cs = window.getComputedStyle(cur);
         const invisible =

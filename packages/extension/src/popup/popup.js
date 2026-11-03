@@ -50,6 +50,7 @@ function renderState(state) {
   $('onRelease').checked = !!config.executeOnRelease;
   $('force').checked = !!config.forceMode;
   $('autoMarks').checked = !!config.autoApplyMarks;
+  $('oversize').checked = !!config.allowOversize;
 
   if (state && typeof state.markCount === 'number') {
     notice(`本域名已记录 ${state.markCount} 条清理规则`);
@@ -110,6 +111,9 @@ async function init() {
   $('force').addEventListener('change', (e) => applyConfig({ forceMode: e.target.checked }));
   $('autoMarks').addEventListener('change', (e) =>
     applyConfig({ autoApplyMarks: e.target.checked })
+  );
+  $('oversize').addEventListener('change', (e) =>
+    applyConfig({ allowOversize: e.target.checked })
   );
 
   $('undo').addEventListener('click', async () => {

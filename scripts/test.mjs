@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import { getSplitPolygons, polygonArea } from '../packages/core/src/geometry.js';
+import { visibleBox } from '../packages/core/src/fragments.js';
 import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS } from '../packages/core/src/config.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -63,6 +64,23 @@ await check('退化方向向量不会产生非法多边形', () => {
   assert.ok(polyA.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
 });
 
+await check('超大容器的可见区域裁剪', () => {
+  globalThis.window = { innerWidth: 1000, innerHeight: 800 };
+
+  const clipped = visibleBox({ left: -50, top: -100, right: 1500, bottom: 2000 });
+  assert.deepEqual(clipped, { left: 0, top: 0, width: 1000, height: 800 });
+
+  const inside = visibleBox({ left: 100, top: 100, right: 300, bottom: 300 });
+  assert.deepEqual(inside, { left: 100, top: 100, width: 200, height: 200 });
+
+  const partial = visibleBox({ left: 900, top: 700, right: 1200, bottom: 1000 });
+  assert.deepEqual(partial, { left: 900, top: 700, width: 100, height: 100 });
+
+  const outside = visibleBox({ left: 1200, top: 900, right: 1500, bottom: 1200 });
+  assert.equal(outside.width, 0);
+  assert.equal(outside.height, 0);
+});
+
 console.log('\n[2] 手感参数锁定');
 
 await check('关键数值与 v0.4.0 调优结果一致', () => {
@@ -73,6 +91,7 @@ await check('关键数值与 v0.4.0 调优结果一致', () => {
   assert.equal(DEFAULT_CONFIG.hitStop, 40);
   assert.equal(DEFAULT_CONFIG.maxTargetRatio, 0.85);
   assert.equal(DEFAULT_CONFIG.maxAncestorDepth, 15);
+  assert.equal(DEFAULT_CONFIG.allowOversize, false, '超大容器默认必须关闭，保持旧手感');
   assert.deepEqual(SIZE_LEVELS, ['auto', 'balance', 'large', 'medium', 'small']);
   assert.deepEqual(HIT_STOPS, [0, 20, 40, 80, 120]);
 });
