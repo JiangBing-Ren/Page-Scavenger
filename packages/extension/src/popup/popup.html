@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>页面清道夫</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="mark"></div>
+      <div class="titles">
+        <h1>页面清道夫</h1>
+        <p id="host" class="host">正在读取当前页面…</p>
+      </div>
+    </header>
+
+    <button id="toggle" class="toggle" type="button">开启斩击</button>
+    <p id="hint" class="hint">Alt+S 快速开关 · Esc 退出</p>
+
+    <section class="rows" id="rows">
+      <label class="row">
+        <span>尺寸挡位</span>
+        <select id="size"></select>
+      </label>
+      <label class="row">
+        <span>顿感强度</span>
+        <select id="hitStop"></select>
+      </label>
+      <label class="row">
+        <span>松手再切除</span>
+        <input type="checkbox" id="onRelease" />
+      </label>
+      <label class="row">
+        <span>自由切割（任意元素）</span>
+        <input type="checkbox" id="force" />
+      </label>
+      <label class="row">
+        <span>刷新后自动清理</span>
+        <input type="checkbox" id="autoMarks" />
+      </label>
+    </section>
+
+    <section class="actions">
+      <button id="undo" type="button">撤销上一次</button>
+      <button id="clear" type="button">清空本域名记录</button>
+      <button id="tutorial" type="button">打开教程关</button>
+    </section>
+
+    <p id="notice" class="notice"></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,98 @@
+name: Bug 报告
+description: 斩击效果异常、目标选错、页面被破坏等问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请确认已用最新的 `dist/extension` 重新加载扩展。
+        涉及具体网站时，如果不便贴截图，描述页面结构即可（例如「卡片列表，单卡约 300×180」）。
+
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器与版本
+      placeholder: 例如 Chrome 141 / Edge 141 / Firefox 120
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: 操作系统
+      placeholder: 例如 Windows 11 24H2 / macOS 14.5
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 扩展版本
+      placeholder: 见扩展管理页或 manifest.json 的 version
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开某网站
+        2. Alt+S 开启斩击
+        3. 按住左键从左向右划过某张卡片
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期表现
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际表现
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size-level
+    attributes:
+      label: 尺寸挡位
+      options:
+        - 自动智能(抓大)
+        - 平衡
+        - 大
+        - 中
+        - 小
+
+  - type: dropdown
+    id: hit-stop
+    attributes:
+      label: 顿感强度
+      options:
+        - 无
+        - 极短(20ms)
+        - 短(40ms)
+        - 中(80ms)
+        - 长(120ms)
+
+  - type: checkboxes
+    id: options
+    attributes:
+      label: 其他开关
+      options:
+        - label: 自由切割（任意元素）
+        - label: 松手再切除
+        - label: 刷新后自动清理
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 截图或录屏
+      description: 可直接拖入图片。录屏有助于判断特效时序问题。
+    validations:
+      required: false

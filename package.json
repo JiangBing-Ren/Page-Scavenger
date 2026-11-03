@@ -1,0 +1,12 @@
+{
+  "name": "page-cleaner",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "description": "页面清道夫 —— 用斩击方式清理网页元素的浏览器扩展",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs"
+  }
+}

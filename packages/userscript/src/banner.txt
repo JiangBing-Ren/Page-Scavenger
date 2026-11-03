@@ -1,0 +1,10 @@
+// ==UserScript==
+// @name         页面清道夫 - Ad Slash
+// @namespace    https://example.local/adslash
+// @version      0.5.0
+// @description  以「斩击」方式切除网页元素：按住左键划过目标，刀光、切线、分离、碎片一气呵成。
+// @match        *://*/*
+// @grant        none
+// @run-at       document-start
+// @noframes
+// ==/UserScript==

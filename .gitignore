@@ -1,0 +1,20 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 打包/签名产物
+*.crx
+*.pem
+*.zip
+
+# 内部笔记与工具状态（不入库）
+notes/
+.codely-cli/
+CODELY.md
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.log

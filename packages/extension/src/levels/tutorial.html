@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>页面清道夫 · 教程关</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1016;
+        --panel: #151a22;
+        --line: #242b36;
+        --text: #e9eef6;
+        --muted: #8593a5;
+        --accent: #00ffcc;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px 120px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .topbar b {
+        color: var(--text);
+        font-size: 15px;
+        letter-spacing: 1px;
+      }
+
+      .topbar nav {
+        display: flex;
+        gap: 16px;
+        margin-left: auto;
+      }
+
+      .hero {
+        margin: 26px 0;
+        padding: 28px;
+        border-radius: 14px;
+        background: linear-gradient(120deg, #1b2431, #10141c 60%);
+        border: 1px solid var(--line);
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+        letter-spacing: 1px;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .banner {
+        margin: 22px 0;
+        padding: 18px 22px;
+        border-radius: 12px;
+        background: linear-gradient(90deg, #33210f, #4a2c12);
+        border: 1px solid #6b4419;
+        color: #ffd9a8;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .banner strong {
+        font-size: 16px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .card {
+        border-radius: 12px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .thumb {
+        height: 96px;
+      }
+
+      .thumb.a {
+        background: linear-gradient(135deg, #1f6feb, #0b3b8c);
+      }
+      .thumb.b {
+        background: linear-gradient(135deg, #00b894, #045c4c);
+      }
+      .thumb.c {
+        background: linear-gradient(135deg, #b23b3b, #5c1414);
+      }
+      .thumb.d {
+        background: linear-gradient(135deg, #8e44ad, #3d1a52);
+      }
+      .thumb.e {
+        background: linear-gradient(135deg, #e67e22, #7a3f0c);
+      }
+      .thumb.f {
+        background: linear-gradient(135deg, #2c3e50, #101820);
+      }
+
+      .card-body {
+        padding: 12px 14px 16px;
+      }
+
+      .card-body h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+      }
+
+      .card-body p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .rows {
+        margin-top: 26px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .row {
+        display: flex;
+        gap: 14px;
+        padding: 14px;
+        border-radius: 12px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+
+      .row .dot {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        flex: none;
+        background: linear-gradient(135deg, #2b3644, #171d26);
+      }
+
+      .row h4 {
+        margin: 0 0 3px;
+        font-size: 13px;
+      }
+
+      .row p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* 教练面板：本体不吃事件，避免打断斩击轨迹 */
+      #coach {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        width: 286px;
+        z-index: 2147483648;
+        background: rgba(14, 18, 25, 0.94);
+        border: 1px solid #2b3442;
+        border-radius: 12px;
+        padding: 14px;
+        backdrop-filter: blur(6px);
+        pointer-events: none;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      }
+
+      #coach h2 {
+        margin: 0 0 10px;
+        font-size: 13px;
+        letter-spacing: 1px;
+        color: var(--accent);
+      }
+
+      #coach ol {
+        margin: 0 0 10px;
+        padding-left: 18px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      #coach li {
+        margin-bottom: 5px;
+        transition: color 0.2s;
+      }
+
+      #coach li.done {
+        color: var(--accent);
+        text-decoration: line-through;
+      }
+
+      #coach .ctrls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        pointer-events: auto;
+      }
+
+      #coach button {
+        pointer-events: auto;
+        flex: 1 1 auto;
+        padding: 7px 9px;
+        font-size: 12px;
+        border-radius: 7px;
+        border: 1px solid #2b3442;
+        background: #171d26;
+        color: var(--text);
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s;
+      }
+
+      #coach button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      #coach .tip {
+        margin: 8px 0 0;
+        font-size: 11px;
+        color: #6c7a8c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <b>今日要闻</b>
+        <nav>
+          <span>首页</span><span>科技</span><span>生活</span><span>关于</span>
+        </nav>
+      </div>
+
+      <section class="hero">
+        <h1>用鼠标当刀，把网页切干净</h1>
+        <p>按住左键划过目标，贯穿之后目标会沿刀线分离、两半拉开、碎片坠落。</p>
+      </section>
+
+      <div class="banner">
+        <strong>【广告位】这块横幅最碍眼</strong>
+        <span>按住左键横向划过它试试</span>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <div class="thumb a"></div>
+          <div class="card-body">
+            <h3>小卡片 · 蓝</h3>
+            <p>面积小，任意挡位都能一次切开。</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="thumb b"></div>
+          <div class="card-body">
+            <h3>小卡片 · 绿</h3>
+            <p>试试一条斜线划过两张卡片。</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="thumb c"></div>
+          <div class="card-body">
+            <h3>小卡片 · 红</h3>
+            <p>连续切开可以触发连斩判定。</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="thumb d"></div>
+          <div class="card-body">
+            <h3>小卡片 · 紫</h3>
+            <p>挡位切到「小」时只会切最内层。</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="thumb e"></div>
+          <div class="card-body">
+            <h3>小卡片 · 橙</h3>
+            <p>切不动就换「中」或「大」挡位。</p>
+          </div>
+        </article>
+        <article class="card">
+          <div class="thumb f"></div>
+          <div class="card-body">
+            <h3>小卡片 · 灰</h3>
+            <p>任何真实网页上的元素都能这样处理。</p>
+          </div>
+        </article>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="dot"></div>
+          <div>
+            <h4>贯穿判定</h4>
+            <p>从目标一侧移入、再从另一侧移出才算命中，划进去又退回来不算。</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="dot"></div>
+          <div>
+            <h4>尺寸挡位</h4>
+            <p>「自动」会向上寻找更大的容器；「大 / 中 / 小」则严格按面积挑目标。</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="dot"></div>
+          <div>
+            <h4>松手再切除</h4>
+            <p>开启后只留切线不立即切断，松开左键才依次落下，适合一次连斩多目标。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside id="coach">
+      <h2>教程关 · 五步</h2>
+      <ol>
+        <li id="s1">按住左键，划过任意一张卡片</li>
+        <li id="s2">700ms 内再切一个目标（连斩）</li>
+        <li id="s3">点下面的「挡位」切一次设置</li>
+        <li id="s4">点「顿感」调整命中停顿</li>
+        <li id="s5">开启「松手再切」并切一个目标</li>
+      </ol>
+      <div class="ctrls">
+        <button id="btn-size" type="button">挡位：自动</button>
+        <button id="btn-hitstop" type="button">顿感：短</button>
+        <button id="btn-release" type="button">松手再切：关</button>
+        <button id="btn-reset" type="button">复位本页</button>
+      </div>
+      <p class="tip">Esc 或右上角 × 可退出斩击模式。</p>
+    </aside>
+
+    <script src="tutorial.js"></script>
+  </body>
+</html>

@@ -1,0 +1,559 @@
+import { DEFAULT_CONFIG, SIZE_LEVELS } from './config.js';
+import { cssPath } from './selector.js';
+import { findSlashTarget } from './targeting.js';
+import { spawnSparks, spawnDOMFragments } from './fragments.js';
+import {
+  drawEffects,
+  drawTargetBoxes,
+  drawTrail,
+  updateParticles,
+  drawCloseButton,
+} from './render.js';
+
+const now = () => performance.now();
+
+/**
+ * 宿主无关的斩击引擎。宿主（扩展 / 油猴 / Electron）只负责：
+ * 提供存储 adapter、决定何时 activate、把配置塞进来。
+ */
+export function createCleaner(options) {
+  const opts = options || {};
+  const storage = opts.storage || null;
+  const onStateChange = typeof opts.onStateChange === 'function' ? opts.onStateChange : () => {};
+  const onSlash = typeof opts.onSlash === 'function' ? opts.onSlash : () => {};
+
+  const CONFIG = Object.assign({}, DEFAULT_CONFIG, opts.config || {});
+
+  const state = {
+    active: false,
+    isDrawing: false,
+    activeHits: new Map(),
+    lockedTargets: new Map(),
+    flashes: [],
+    particles: [],
+    canvas: null,
+    ctx: null,
+    dpr: 1,
+    cssW: 0,
+    cssH: 0,
+    trail: [],
+    prevPoint: null,
+    rafId: null,
+    observer: null,
+    slashed: new WeakSet(),
+    pending: new Set(),
+    undoStack: [],
+    closeBtn: null,
+    listeners: [],
+    marks: [],
+    slashCount: 0,
+  };
+
+  let saveTimer = null;
+
+  const saveMarks = () => {
+    if (!storage || typeof storage.saveMarks !== 'function') return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      try {
+        storage.saveMarks(state.marks.slice());
+      } catch (e) {}
+    }, 200);
+  };
+
+  function addMark(sel) {
+    if (!sel) return;
+    if (state.marks.includes(sel)) return;
+    state.marks.push(sel);
+    if (state.marks.length > 200) state.marks.splice(0, state.marks.length - 200);
+    saveMarks();
+  }
+
+  function removeMark(sel) {
+    const idx = state.marks.indexOf(sel);
+    if (idx >= 0) {
+      state.marks.splice(idx, 1);
+      saveMarks();
+    }
+  }
+
+  function hideEl(el) {
+    try {
+      el.style.setProperty(CONFIG.hideProp, CONFIG.hideValue, 'important');
+    } catch (e) {}
+  }
+
+  function restoreEl(el, prevStyle) {
+    try {
+      if (prevStyle == null) el.removeAttribute('style');
+      else el.setAttribute('style', prevStyle);
+    } catch (e) {}
+  }
+
+  function slash(el, hitPoint, dir, entryPoint, flashTrail) {
+    if (!el || state.pending.has(el) || state.slashed.has(el)) return;
+
+    state.pending.add(el);
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) {
+      state.pending.delete(el);
+      return;
+    }
+
+    if (flashTrail && flashTrail.length > 1) {
+      state.flashes.push({ trail: flashTrail, hitPoint, alpha: 1, fade: 0.06 });
+    }
+
+    const sel = cssPath(el);
+    const prevStyle = el.getAttribute('style');
+    const record = { sel, prevStyle };
+
+    try {
+      hideEl(el);
+      state.slashed.add(el);
+      if (sel) addMark(sel);
+      state.undoStack.push(record);
+      if (state.undoStack.length > 20) state.undoStack.shift();
+
+      spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
+      spawnSparks(state.particles, rect, hitPoint, dir);
+
+      state.slashCount++;
+      onSlash({ el, rect, count: state.slashCount });
+    } catch (e) {
+      console.error(e);
+      hideEl(el);
+    }
+
+    state.pending.delete(el);
+  }
+
+  function checkHits(x, y) {
+    for (const [el, entry] of state.activeHits.entries()) {
+      if (state.lockedTargets.has(el)) {
+        state.activeHits.delete(el);
+        continue;
+      }
+
+      const rect = el.getBoundingClientRect();
+
+      if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+        const dx = Math.abs(x - entry.x);
+        const dy = Math.abs(y - entry.y);
+
+        if (dx > rect.width * CONFIG.pierceRatio || dy > rect.height * CONFIG.pierceRatio) {
+          const hitPoint = { x, y };
+          const dir = { x: x - entry.x, y: y - entry.y };
+
+          const flashTrail = [];
+          for (let i = 0; i < state.trail.length; i++) {
+            flashTrail.push({ x: state.trail[i].x, y: state.trail[i].y });
+          }
+
+          if (CONFIG.executeOnRelease) {
+            state.lockedTargets.set(el, {
+              entry: { x: entry.x, y: entry.y },
+              hitPoint,
+              dir,
+              flashTrail,
+            });
+          } else {
+            slash(el, hitPoint, dir, { x: entry.x, y: entry.y }, flashTrail);
+          }
+        }
+
+        state.activeHits.delete(el);
+      }
+    }
+
+    let stack;
+    try {
+      stack = document.elementsFromPoint(x, y);
+    } catch (e) {
+      return;
+    }
+    if (!stack || !stack.length) return;
+
+    let hit = null;
+    for (const n of stack) {
+      if (!n || n.nodeType !== 1) continue;
+      if (n === state.canvas || n === document.documentElement || n === document.body) continue;
+      if (n.hasAttribute && n.hasAttribute('data-adslash-ui')) continue;
+      hit = n;
+      break;
+    }
+    if (!hit) return;
+
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+    const target = findSlashTarget(hit, env);
+    if (
+      !target ||
+      state.pending.has(target) ||
+      state.slashed.has(target) ||
+      state.activeHits.has(target) ||
+      state.lockedTargets.has(target)
+    ) {
+      return;
+    }
+
+    state.activeHits.set(target, { x, y });
+  }
+
+  function onPointerDown(e) {
+    if (!state.active) return;
+
+    const btn = state.closeBtn;
+    if (
+      btn &&
+      e.clientX >= btn.x &&
+      e.clientX <= btn.x + btn.w &&
+      e.clientY >= btn.y &&
+      e.clientY <= btn.y + btn.h
+    ) {
+      e.preventDefault();
+      e.stopPropagation();
+      deactivate();
+      return;
+    }
+
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    e.preventDefault();
+
+    state.isDrawing = true;
+    state.activeHits.clear();
+    state.lockedTargets.clear();
+
+    const pt = { x: e.clientX, y: e.clientY, t: now() };
+    state.prevPoint = pt;
+    state.trail.push(pt);
+    if (state.trail.length > CONFIG.trailLength) state.trail.shift();
+  }
+
+  function onPointerMove(e) {
+    if (!state.active || !state.isDrawing) return;
+
+    const pt = { x: e.clientX, y: e.clientY, t: now() };
+
+    if (state.prevPoint) {
+      const a = state.prevPoint;
+      const b = pt;
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+
+      if (dist > 1) {
+        const steps = Math.max(1, Math.ceil(dist / CONFIG.sampleStep));
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          checkHits(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        }
+      }
+    }
+
+    state.prevPoint = pt;
+    state.trail.push(pt);
+    if (state.trail.length > CONFIG.trailLength) state.trail.shift();
+  }
+
+  function onPointerUp() {
+    if (!state.active) return;
+
+    state.isDrawing = false;
+    state.prevPoint = null;
+    state.activeHits.clear();
+
+    if (CONFIG.executeOnRelease && state.lockedTargets.size > 0) {
+      const targets = Array.from(state.lockedTargets.entries());
+      state.lockedTargets.clear();
+
+      let delay = 0;
+      for (let i = 0; i < targets.length; i++) {
+        const [el, data] = targets[i];
+        setTimeout(() => {
+          slash(el, data.hitPoint, data.dir, data.entry, data.flashTrail);
+        }, delay);
+        delay += Math.max(50, 150 / (i + 1));
+      }
+    }
+  }
+
+  function onWheel(e) {
+    if (state.active) e.preventDefault();
+  }
+
+  function onKeyDown(e) {
+    if (state.active && e.key === 'Escape') {
+      e.preventDefault();
+      deactivate();
+    }
+  }
+
+  function loop() {
+    if (!state.active || !state.ctx) {
+      state.rafId = null;
+      return;
+    }
+
+    const ctx = state.ctx;
+    ctx.clearRect(0, 0, state.cssW, state.cssH);
+
+    const tNow = now();
+    if (!state.isDrawing) {
+      while (state.trail.length && tNow - state.trail[0].t > CONFIG.trailLifeMs + 40) {
+        state.trail.shift();
+      }
+    }
+
+    drawTargetBoxes(ctx, state);
+    drawEffects(ctx, state);
+    drawTrail(ctx, state, CONFIG);
+    updateParticles(ctx, state);
+    drawCloseButton(ctx, state);
+
+    state.rafId = requestAnimationFrame(loop);
+  }
+
+  function resizeCanvas() {
+    const c = state.canvas;
+    if (!c) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+
+    const ctx = c.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+
+    state.dpr = dpr;
+    state.cssW = w;
+    state.cssH = h;
+    state.ctx = ctx;
+  }
+
+  function bind(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    state.listeners.push({ target, type, fn, opts });
+  }
+
+  function createCanvas() {
+    const c = document.createElement('canvas');
+    c.dataset.adslashUi = '1';
+    Object.assign(c.style, {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      zIndex: '2147483647',
+      pointerEvents: 'auto',
+      cursor: 'crosshair',
+      touchAction: 'none',
+      background: 'transparent',
+      display: 'block',
+    });
+
+    const root = document.documentElement || document.body;
+    if (!root) return;
+    root.appendChild(c);
+
+    state.canvas = c;
+    resizeCanvas();
+
+    bind(c, 'pointermove', onPointerMove, { passive: true });
+    bind(c, 'pointerdown', onPointerDown, { passive: false });
+    bind(c, 'pointerup', onPointerUp, { passive: true });
+    bind(c, 'pointercancel', onPointerUp, { passive: true });
+    bind(c, 'wheel', onWheel, { passive: false });
+    bind(window, 'resize', resizeCanvas, { passive: true });
+    bind(window, 'keydown', onKeyDown, { passive: false });
+  }
+
+  function destroyCanvas() {
+    if (state.rafId) {
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+    }
+    for (const l of state.listeners) l.target.removeEventListener(l.type, l.fn, l.opts);
+    state.listeners = [];
+
+    if (state.canvas && state.canvas.parentNode) state.canvas.parentNode.removeChild(state.canvas);
+
+    state.canvas = null;
+    state.ctx = null;
+    state.trail = [];
+    state.flashes = [];
+    state.particles = [];
+    state.prevPoint = null;
+    state.closeBtn = null;
+  }
+
+  function applyMarks() {
+    if (!document.body) return;
+    if (!state.marks.length) return;
+
+    for (const sel of state.marks) {
+      let nodes;
+      try {
+        nodes = document.querySelectorAll(sel);
+      } catch (e) {
+        continue;
+      }
+      for (const el of nodes) {
+        if (state.slashed.has(el)) continue;
+        hideEl(el);
+        state.slashed.add(el);
+      }
+    }
+  }
+
+  function startObserver() {
+    if (state.observer || !document.body) return;
+
+    let timer = null;
+    const obs = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (state.active) applyMarks();
+      }, 120);
+    });
+
+    obs.observe(document.body, { childList: true, subtree: true });
+    state.observer = obs;
+  }
+
+  function stopObserver() {
+    if (state.observer) {
+      state.observer.disconnect();
+      state.observer = null;
+    }
+  }
+
+  function activate() {
+    if (state.active) return;
+
+    state.active = true;
+    createCanvas();
+    startObserver();
+    if (!state.rafId) state.rafId = requestAnimationFrame(loop);
+
+    onStateChange(true);
+  }
+
+  function deactivate() {
+    if (!state.active) return;
+
+    state.active = false;
+    stopObserver();
+    destroyCanvas();
+
+    onStateChange(false);
+  }
+
+  function toggle() {
+    if (state.active) deactivate();
+    else activate();
+  }
+
+  function undoLast() {
+    const rec = state.undoStack.pop();
+    if (!rec) return false;
+
+    removeMark(rec.sel);
+
+    let el = null;
+    try {
+      el = document.querySelector(rec.sel);
+    } catch (e) {
+      el = null;
+    }
+
+    if (el) {
+      restoreEl(el, rec.prevStyle);
+      state.slashed.delete(el);
+    }
+    return true;
+  }
+
+  function clearMarks() {
+    state.marks.length = 0;
+    if (storage && typeof storage.clearMarks === 'function') {
+      try {
+        storage.clearMarks();
+      } catch (e) {}
+    } else {
+      saveMarks();
+    }
+  }
+
+  function setConfig(patch) {
+    if (!patch) return CONFIG;
+
+    for (const key of Object.keys(patch)) {
+      if (!(key in DEFAULT_CONFIG)) continue;
+      const value = patch[key];
+      if (key === 'targetSizeLevel') {
+        if (SIZE_LEVELS.indexOf(value) === -1) continue;
+      }
+      CONFIG[key] = value;
+    }
+
+    if (state.active) {
+      applyMarks();
+    }
+    return CONFIG;
+  }
+
+  function getConfig() {
+    return CONFIG;
+  }
+
+  const ready = (async () => {
+    if (storage && typeof storage.loadMarks === 'function') {
+      try {
+        const saved = await storage.loadMarks();
+        if (Array.isArray(saved)) state.marks = saved.slice(-200);
+      } catch (e) {}
+    }
+
+    if (CONFIG.autoApplyMarks) {
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyMarks, { once: true });
+      } else {
+        applyMarks();
+      }
+    }
+  })();
+
+  function destroy() {
+    deactivate();
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+      if (storage && typeof storage.saveMarks === 'function') {
+        try {
+          storage.saveMarks(state.marks.slice());
+        } catch (e) {}
+      }
+    }
+  }
+
+  return {
+    ready,
+    activate,
+    deactivate,
+    toggle,
+    isActive: () => state.active,
+    setConfig,
+    getConfig,
+    undoLast,
+    clearMarks,
+    getMarkCount: () => state.marks.length,
+    getSlashCount: () => state.slashCount,
+    destroy,
+  };
+}

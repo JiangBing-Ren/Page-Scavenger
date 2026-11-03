@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 构建扩展与油猴脚本
+        run: node scripts/build.mjs
+
+      - name: 运行校验
+        run: node scripts/test.mjs
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: page-cleaner-build
+          path: |
+            dist/extension
+            dist/extension-firefox
+            dist/页面清道夫.user.js
+          if-no-files-found: error
