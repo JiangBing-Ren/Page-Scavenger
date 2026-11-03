@@ -1,4 +1,5 @@
 import { createCleaner } from '../../core/src/engine.js';
+import { createFreeScore } from '../../core/src/freescore.js';
 import {
   SIZE_LEVELS,
   SIZE_LABELS,
@@ -43,12 +44,18 @@ const storage = {
 
 let fab = null;
 
+const freeScore = createFreeScore();
+
 const cleaner = createCleaner({
   storage,
   onStateChange(active) {
+    freeScore.setActive(active);
     if (!fab) return;
     fab.innerText = active ? '⏹ 退出斩击' : '⚔️ 开启斩击';
     fab.style.background = active ? '#4CAF50' : '#1e1e1e';
+  },
+  onSlash(info) {
+    freeScore.record(info);
   },
 });
 

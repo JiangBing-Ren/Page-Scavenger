@@ -1,4 +1,5 @@
 import { createCleaner } from '../../core/src/engine.js';
+import { createFreeScore } from '../../core/src/freescore.js';
 
 const { ipcRenderer } = require('electron');
 
@@ -49,10 +50,16 @@ function boot() {
     },
   };
 
+  const freeScore = createFreeScore();
+
   const cleaner = createCleaner({
     storage,
     onStateChange(active) {
+      freeScore.setActive(active);
       ipcRenderer.send('adslash:state', { active, config: cleaner.getConfig() });
+    },
+    onSlash(info) {
+      freeScore.record(info);
     },
   });
 

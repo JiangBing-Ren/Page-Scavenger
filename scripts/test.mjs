@@ -17,6 +17,7 @@ import {
   scoreForSlash,
   timeBonus,
 } from '../packages/core/src/score.js';
+import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -397,6 +398,44 @@ await check('单刀结算', () => {
 
   const mixed = scoreForSlash([40], 1, 1);
   assert.equal(mixed.total, 15);
+});
+
+console.log('\n[7] 自由模式计分');
+
+await check('连续快切累积连击', () => {
+  const score = createFreeScore();
+  const rect = { width: 200, height: 150 }; // 30000 px² → 基础 20 分
+  score.record({ rect }, 1000);
+  score.record({ rect }, 1100);
+  score.record({ rect }, 1200);
+
+  const state = score.getState();
+  assert.equal(state.combo, 3);
+  assert.equal(state.hits, 3);
+  assert.equal(state.score, 20 + 25 + 30);
+});
+
+await check('超出连击窗口后重新从 1 起算', () => {
+  const score = createFreeScore();
+  const rect = { width: 200, height: 150 };
+  score.record({ rect }, 1000);
+  score.record({ rect }, 1000 + COMBO_WINDOW_MS + 1);
+
+  assert.equal(score.getState().combo, 1);
+  assert.equal(score.getState().score, 40);
+});
+
+await check('自由模式倍率同样封顶 3 倍', () => {
+  const score = createFreeScore();
+  const rect = { width: 200, height: 150 };
+  let expected = 0;
+  for (let i = 1; i <= 12; i++) {
+    score.record({ rect }, 1000 + i * 100);
+    expected += scoreForSlash([20], i, 0).total;
+  }
+  assert.equal(score.getState().combo, 12);
+  assert.equal(score.getState().score, expected);
+  assert.equal(comboMultiplier(12), 3);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

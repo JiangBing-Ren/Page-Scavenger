@@ -1,4 +1,5 @@
 import { createCleaner } from '../../core/src/engine.js';
+import { createFreeScore } from '../../core/src/freescore.js';
 
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -8,6 +9,7 @@ const MSG_PREFIX = 'adslash:';
 const marksKey = () => 'adslash.marks.' + location.hostname;
 
 let cleaner = null;
+const freeScore = createFreeScore();
 let currentSettings = {};
 
 function createStorage() {
@@ -47,7 +49,13 @@ function ensure() {
 
   cleaner = createCleaner({
     storage: createStorage(),
-    onStateChange: reportState,
+    onStateChange(active) {
+      freeScore.setActive(active);
+      reportState(active);
+    },
+    onSlash(info) {
+      freeScore.record(info);
+    },
   });
 
   if (Object.keys(currentSettings).length) cleaner.setConfig(currentSettings);

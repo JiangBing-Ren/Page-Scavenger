@@ -187,7 +187,8 @@ function createWindow() {
             ' const canvasCount = document.querySelectorAll("canvas[data-adslash-ui]").length;' +
             ' const hud = document.getElementById("cleaner-hud");' +
             ' const targets = document.querySelectorAll("[data-target]").length;' +
-            ' return JSON.stringify({ canvasCount, hud: !!hud, targets });' +
+            ' const free = document.getElementById("cleaner-free-score");' +
+            ' return JSON.stringify({ canvasCount, hud: !!hud, targets, free: !!free, freeOn: !!(free && free.classList.contains("on")) });' +
             '})()'
         );
         console.log('[selftest] ' + base);
