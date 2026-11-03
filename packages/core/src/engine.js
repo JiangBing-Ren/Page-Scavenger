@@ -38,6 +38,8 @@ export function createCleaner(options) {
     shockwaves: [],
     flashWhite: 0,
     shake: 0,
+    cutFlashes: [],
+    batchRemaining: 0,
     canvas: null,
     ctx: null,
     dpr: 1,
@@ -197,24 +199,92 @@ export function createCleaner(options) {
     }
 
     rec.cuts.push({ entry, hitPoint, dir, flashTrail });
-    sound.slice(rec.cuts.length);
-
-    // 超过 3 刀开始抬起放大，刀越多越明显
-    const over = rec.cuts.length;
-    if (over > 3) {
-      const strong = over >= 7;
-      applyLift(el, strong ? 1.08 : 1.05, strong ? -16 : -10);
-    }
   }
 
-  // 多刀炸开：按所有切线顺序切分，一次生成 N+1 块
-  function multiSlash(el, cuts) {
-    if (!el || state.pending.has(el) || state.slashed.has(el)) return;
+  // 松手后的完整流程：抬起 → 逐刀由慢到快 → 一次性炸开
+  function executeCuts(el, rec) {
+    if (!el || state.pending.has(el) || state.slashed.has(el)) {
+      finishBatch();
+      return;
+    }
 
+    const cuts = rec && rec.cuts ? rec.cuts : [];
+    if (!cuts.length) {
+      finishBatch();
+      return;
+    }
+
+    if (cuts.length === 1) {
+      const c = cuts[0];
+      slash(el, c.hitPoint, c.dir, c.entry, c.flashTrail);
+      finishBatch();
+      return;
+    }
+
+    // 播放序列期间占位，避免同一目标被再次锁定而跑出两条序列
     state.pending.add(el);
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 4 || rect.height < 4) {
+
+    // 超过 3 刀才抬起；等过渡结束再取矩形，让刀线跟着元素走
+    const willLift = cuts.length > 3;
+    const strong = cuts.length >= 7;
+    if (willLift) applyLift(el, strong ? 1.08 : 1.05, strong ? -16 : -10);
+
+    setTimeout(
+      () => {
+        const rect = el.getBoundingClientRect();
+        const mapped = mapCuts(cuts, rec.rect, rect);
+        runCutStep(el, rect, mapped, 0, () => explode(el, rect, mapped));
+      },
+      willLift ? 160 : 0
+    );
+  }
+
+  // 记录时的屏幕坐标 → 当前矩形坐标（抬升/放大后仍然对齐）
+  function mapCuts(cuts, from, to) {
+    if (!from || !to || from.width < 1 || from.height < 1) return cuts;
+    const sx = to.width / from.width;
+    const sy = to.height / from.height;
+    const map = (p) => ({
+      x: to.left + (p.x - from.left) * sx,
+      y: to.top + (p.y - from.top) * sy,
+    });
+    return cuts.map((c) => ({
+      entry: map(c.entry),
+      hitPoint: map(c.hitPoint),
+      dir: { x: c.dir.x * sx, y: c.dir.y * sy },
+      flashTrail: c.flashTrail,
+    }));
+  }
+
+  // 逐刀落线：每条线闪一下、响一声，间隔由慢到快
+  function runCutStep(el, rect, cuts, index, done) {
+    if (index >= cuts.length) {
+      done();
+      return;
+    }
+
+    const cut = cuts[index];
+    state.cutFlashes.push({
+      ax: cut.entry.x,
+      ay: cut.entry.y,
+      bx: cut.hitPoint.x,
+      by: cut.hitPoint.y,
+      alpha: 1,
+    });
+    sound.slice(index + 1);
+
+    const gap = Math.max(
+      CONFIG.cutStepMin,
+      CONFIG.cutStepBase * Math.pow(CONFIG.cutStepDecay, index)
+    );
+    setTimeout(() => runCutStep(el, rect, cuts, index + 1, done), gap);
+  }
+
+  function explode(el, rect, cuts) {
+    // 播放序列时已经占位了 pending，这里只判断是否已被处理过
+    if (!el || state.slashed.has(el)) {
       state.pending.delete(el);
+      finishBatch();
       return;
     }
 
@@ -232,7 +302,6 @@ export function createCleaner(options) {
 
       spawnMultiCutFragments(el, rect, cuts, CONFIG.hitStop);
 
-      // 冲击波留在每个目标上（局部效果），整屏白闪与震屏统一在松手时触发
       sound.burst();
       state.shockwaves.push({
         x: rect.left + rect.width / 2,
@@ -252,6 +321,16 @@ export function createCleaner(options) {
     }
 
     state.pending.delete(el);
+    finishBatch();
+  }
+
+  // 整批目标炸完后，白闪与震屏只来一次
+  function finishBatch() {
+    state.batchRemaining -= 1;
+    if (state.batchRemaining > 0) return;
+    state.batchRemaining = 0;
+    state.flashWhite = 1;
+    state.shake = 1;
   }
 
   function checkHits(x, y) {
@@ -417,22 +496,12 @@ export function createCleaner(options) {
       const targets = Array.from(state.lockedTargets.entries());
       state.lockedTargets.clear();
 
-      // 整屏效果只在「斩完」这一刻触发一次
-      state.flashWhite = 1;
-      state.shake = 1;
+      state.batchRemaining = targets.length;
 
       let delay = 0;
       for (let i = 0; i < targets.length; i++) {
         const [el, rec] = targets[i];
-        setTimeout(() => {
-          if (!rec.cuts.length) return;
-          if (rec.cuts.length === 1) {
-            const c = rec.cuts[0];
-            slash(el, c.hitPoint, c.dir, c.entry, c.flashTrail);
-          } else {
-            multiSlash(el, rec.cuts);
-          }
-        }, delay);
+        setTimeout(() => executeCuts(el, rec), delay);
         delay += Math.max(50, 150 / (i + 1));
       }
     }

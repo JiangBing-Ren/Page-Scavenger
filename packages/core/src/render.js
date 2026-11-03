@@ -162,6 +162,36 @@ export function drawEffects(ctx, state) {
     ctx.restore();
   }
 
+  // 逐刀落线的高亮
+  if (state.cutFlashes && state.cutFlashes.length) {
+    for (let i = state.cutFlashes.length - 1; i >= 0; i--) {
+      const f = state.cutFlashes[i];
+      f.alpha -= 0.09;
+      if (f.alpha <= 0) {
+        state.cutFlashes.splice(i, 1);
+        continue;
+      }
+
+      const dx = f.bx - f.ax;
+      const dy = f.by - f.ay;
+      const len = Math.hypot(dx, dy) || 1;
+      const ex = (dx / len) * 40;
+      const ey = (dy / len) * 40;
+
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(255, 255, 255, ${f.alpha})`;
+      ctx.lineWidth = 1.2 + 2 * f.alpha;
+      ctx.shadowColor = 'rgba(0, 255, 204, 1)';
+      ctx.shadowBlur = 18 * f.alpha;
+      ctx.beginPath();
+      ctx.moveTo(f.ax - ex, f.ay - ey);
+      ctx.lineTo(f.bx + ex, f.by + ey);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   if (state.shockwaves && state.shockwaves.length) {
     for (let i = state.shockwaves.length - 1; i >= 0; i--) {
       const w = state.shockwaves[i];

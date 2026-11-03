@@ -132,6 +132,8 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: false,
+      // 游戏特效不应因窗口失焦被浏览器节流
+      backgroundThrottling: false,
     },
   });
   win.contentView.addChildView(view);
@@ -273,7 +275,8 @@ function createWindow() {
               '})()'
           );
 
-          await sleep(200);
+          // 逐刀序列 + 抬升过渡 + 炸开，总共约 700ms，这里留足时间
+          await sleep(1100);
           const snap = async () =>
             wc.executeJavaScript(
               '(() => {' +
