@@ -74,6 +74,9 @@ oversize.addEventListener('change', () =>
   api.game.setConfig({ allowOversize: oversize.checked })
 );
 
+const comboCut = $('comboCut');
+comboCut.addEventListener('change', () => api.game.setConfig({ comboCut: comboCut.checked }));
+
 // 主进程推送
 api.on.nav((patch) => {
   if (patch.url !== undefined && document.activeElement !== addr) addr.value = prettyUrl(patch.url);
@@ -98,6 +101,7 @@ api.on.game((state) => {
   onRelease.checked = !!config.executeOnRelease;
   force.checked = !!config.forceMode;
   oversize.checked = !!config.allowOversize;
+  comboCut.checked = !!config.comboCut;
 });
 
 addr.focus();

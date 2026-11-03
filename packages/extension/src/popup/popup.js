@@ -51,6 +51,7 @@ function renderState(state) {
   $('force').checked = !!config.forceMode;
   $('autoMarks').checked = !!config.autoApplyMarks;
   $('oversize').checked = !!config.allowOversize;
+  $('comboCut').checked = !!config.comboCut;
 
   if (state && typeof state.markCount === 'number') {
     notice(`本域名已记录 ${state.markCount} 条清理规则`);
@@ -114,6 +115,9 @@ async function init() {
   );
   $('oversize').addEventListener('change', (e) =>
     applyConfig({ allowOversize: e.target.checked })
+  );
+  $('comboCut').addEventListener('change', (e) =>
+    applyConfig({ comboCut: e.target.checked })
   );
 
   $('undo').addEventListener('click', async () => {

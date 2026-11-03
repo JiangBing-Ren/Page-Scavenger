@@ -189,7 +189,9 @@ function pointsOf(el) {
   return basePointsForArea(rect.width * rect.height);
 }
 
-function handleSlash({ el }) {
+function handleSlash({ el, piece }) {
+  // 连切碎片不计入关卡目标，避免误断连击
+  if (piece) return;
   if (state.finished || !el) return;
   startTimer();
 

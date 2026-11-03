@@ -1,5 +1,9 @@
 import { MEDIA_SELECTOR } from './config.js';
-import { getSplitPolygons } from './geometry.js';
+import { getSplitPolygons, polygonArea } from './geometry.js';
+import { registerPiece, unregisterPiece, splitPolygon, screenToLocal } from './pieces.js';
+
+// 再切后单块面积下限，低于它就不再分，避免无限碎片
+const MIN_PIECE_AREA = 60;
 
 export function spawnSparks(particles, rect, hitPoint, dir) {
   const len = Math.hypot(dir.x, dir.y);
@@ -109,60 +113,84 @@ export function visibleBox(rect) {
   };
 }
 
-function animatePieces(pieceA, pieceB, nx, speedX, rotA, rotB, hitStop) {
-  setTimeout(() => {
+function polygonToCss(poly) {
+  return poly.map((p) => `${p.x.toFixed(1)}px ${p.y.toFixed(1)}px`).join(',');
+}
+
+// 生成一个「给定局部多边形就能画出碎片」的构造器，重切时复用同一份
+function makeBuilder(el, rect, box, oversized, filterStr) {
+  return function build(poly) {
+    const clip = `polygon(${polygonToCss(poly)})`;
+
+    if (!oversized) {
+      const node = cloneForFragment(el);
+      node.removeAttribute('id');
+      node.setAttribute('data-adslash-ui', '1');
+      Object.assign(node.style, baseStyleFor(box.left, box.top, box.width, box.height), {
+        clipPath: clip,
+        filter: filterStr,
+      });
+      node.style.setProperty('visibility', 'visible', 'important');
+      document.body.appendChild(node);
+      return node;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-adslash-ui', '1');
+    Object.assign(wrapper.style, baseStyleFor(box.left, box.top, box.width, box.height), {
+      clipPath: clip,
+      filter: filterStr,
+      background: 'transparent',
+    });
+
+    const clone = cloneForFragment(el);
+    clone.removeAttribute('id');
+    Object.assign(clone.style, {
+      position: 'fixed',
+      left: rect.left - box.left + 'px',
+      top: rect.top - box.top + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px',
+      margin: '0',
+      boxSizing: 'border-box',
+      pointerEvents: 'none',
+    });
+    clone.style.setProperty('visibility', 'visible', 'important');
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+    return wrapper;
+  };
+}
+
+function animate(node, options) {
+  const { nx, speedX, rot, axis, hitStop, fromTransform, fromOpacity } = options;
+
+  const run = () => {
+    if (fromTransform) {
+      node.style.transform = fromTransform;
+      if (fromOpacity != null) node.style.opacity = String(fromOpacity);
+      void node.offsetWidth;
+    }
+
     const trans =
       'transform 1.2s cubic-bezier(0.3, 0.1, 0.6, 1), opacity 0.6s ease-in 0.6s, filter 0.2s';
 
-    Object.assign(pieceA.style, {
+    Object.assign(node.style, {
       transition: trans,
-      transform: `translate3d(${nx * speedX}px, 600px, 0) rotate3d(1, 1, 0, ${rotA}deg)`,
-      opacity: '0',
-      filter: 'none',
-    });
-
-    Object.assign(pieceB.style, {
-      transition: trans,
-      transform: `translate3d(${-nx * speedX}px, 600px, 0) rotate3d(1, -1, 0, ${rotB}deg)`,
+      transform: `translate3d(${nx * speedX}px, 600px, 0) rotate3d(1, ${axis}, 0, ${rot}deg)`,
       opacity: '0',
       filter: 'none',
     });
 
     setTimeout(() => {
-      if (pieceA.parentNode) pieceA.parentNode.removeChild(pieceA);
-      if (pieceB.parentNode) pieceB.parentNode.removeChild(pieceB);
-    }, 1500);
-  }, hitStop);
-}
+      unregisterPiece(node);
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, 1600);
+  };
 
-// 超大元素：只切可见的那一块。外面套一层按可见区域裁剪的容器，
-// 内层克隆保持元素真实尺寸并做负向偏移。
-function buildOversizePiece(el, rect, box, polygonStr, filterStr) {
-  const wrapper = document.createElement('div');
-  wrapper.setAttribute('data-adslash-ui', '1');
-  Object.assign(wrapper.style, baseStyleFor(box.left, box.top, box.width, box.height), {
-    clipPath: `polygon(${polygonStr})`,
-    filter: filterStr,
-    background: 'transparent',
-  });
-
-  const clone = cloneForFragment(el);
-  clone.removeAttribute('id');
-  Object.assign(clone.style, {
-    position: 'fixed',
-    left: rect.left - box.left + 'px',
-    top: rect.top - box.top + 'px',
-    width: rect.width + 'px',
-    height: rect.height + 'px',
-    margin: '0',
-    boxSizing: 'border-box',
-    pointerEvents: 'none',
-  });
-  clone.style.setProperty('visibility', 'visible', 'important');
-
-  wrapper.appendChild(clone);
-  document.body.appendChild(wrapper);
-  return wrapper;
+  if (hitStop > 0) setTimeout(run, hitStop);
+  else run();
 }
 
 export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
@@ -195,51 +223,98 @@ export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) 
   }
   const a = { x: ax, y: ay };
 
-  const w = box.width;
-  const h = box.height;
-
-  const { polyA, polyB } = getSplitPolygons(w, h, a, dx, dy);
+  const { polyA, polyB } = getSplitPolygons(box.width, box.height, a, dx, dy);
   if (polyA.length < 3 || polyB.length < 3) return;
 
-  const toPolygon = (poly) => poly.map((p) => `${p.x.toFixed(1)}px ${p.y.toFixed(1)}px`).join(',');
-  const pStrA = toPolygon(polyA);
-  const pStrB = toPolygon(polyB);
-
   const filterStr = 'brightness(2.5) contrast(1.5)';
+  const build = makeBuilder(el, rect, box, oversized, filterStr);
 
-  let pieceA;
-  let pieceB;
+  const metaBase = { build, box, screenCache: null, bornAt: performance.now() };
 
-  if (oversized) {
-    pieceA = buildOversizePiece(el, rect, box, pStrA, filterStr);
-    pieceB = buildOversizePiece(el, rect, box, pStrB, filterStr);
-  } else {
-    pieceA = cloneForFragment(el);
-    pieceA.removeAttribute('id');
-    pieceA.setAttribute('data-adslash-ui', '1');
-    Object.assign(pieceA.style, baseStyleFor(box.left, box.top, w, h), {
-      clipPath: `polygon(${pStrA})`,
-      filter: filterStr,
-    });
-    pieceA.style.setProperty('visibility', 'visible', 'important');
-    document.body.appendChild(pieceA);
-
-    pieceB = cloneForFragment(el);
-    pieceB.removeAttribute('id');
-    pieceB.setAttribute('data-adslash-ui', '1');
-    Object.assign(pieceB.style, baseStyleFor(box.left, box.top, w, h), {
-      clipPath: `polygon(${pStrB})`,
-      filter: filterStr,
-    });
-    pieceB.style.setProperty('visibility', 'visible', 'important');
-    document.body.appendChild(pieceB);
-  }
+  const pieceA = build(polyA);
+  registerPiece(pieceA, { ...metaBase, polygon: polyA });
+  const pieceB = build(polyB);
+  registerPiece(pieceB, { ...metaBase, polygon: polyB });
 
   const nx = -dy;
-  const ny = dx;
   const speedX = 150 + Math.min(200, len * 3);
   const rotA = (Math.random() - 0.5) * 90;
   const rotB = (Math.random() - 0.5) * 90;
 
-  animatePieces(pieceA, pieceB, nx, speedX, rotA, rotB, hitStop);
+  animate(pieceA, { nx, speedX, rot: rotA, axis: 1, hitStop });
+  animate(pieceB, { nx: -nx, speedX, rot: rotB, axis: -1, hitStop });
+}
+
+// 连切：把一块碎片沿新的刀线再分成两块，子块从父块的当前姿态继续飞
+export function reslicePiece(item, entry, exit, hitStop, onSlice) {
+  const node = item.node;
+  const meta = item.meta;
+  if (!node.isConnected) return false;
+
+  const a = screenToLocal(node, meta, entry);
+  const b = screenToLocal(node, meta, exit);
+
+  let dx = b.x - a.x;
+  let dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 4) return false;
+  dx /= len;
+  dy /= len;
+
+  const { left, right } = splitPolygon(meta.polygon, a, dx, dy);
+  if (left.length < 3 || right.length < 3) return false;
+  if (polygonArea(left) < MIN_PIECE_AREA || polygonArea(right) < MIN_PIECE_AREA) return false;
+
+  const cs = window.getComputedStyle(node);
+  const fromTransform = cs.transform === 'none' ? '' : cs.transform;
+  const fromOpacity = cs.opacity;
+
+  const sliceRect = node.getBoundingClientRect();
+
+  const nodeA = meta.build(left);
+  const nodeB = meta.build(right);
+
+  registerPiece(nodeA, {
+    ...meta,
+    polygon: left,
+    screenCache: null,
+    bornAt: performance.now(),
+  });
+  registerPiece(nodeB, {
+    ...meta,
+    polygon: right,
+    screenCache: null,
+    bornAt: performance.now(),
+  });
+
+  unregisterPiece(node);
+  if (node.parentNode) node.parentNode.removeChild(node);
+
+  const nx = -dy;
+  const speedX = 150 + Math.min(200, len * 3);
+
+  animate(nodeA, {
+    nx,
+    speedX,
+    rot: (Math.random() - 0.5) * 90,
+    axis: 1,
+    hitStop: 0,
+    fromTransform,
+    fromOpacity,
+  });
+  animate(nodeB, {
+    nx: -nx,
+    speedX,
+    rot: (Math.random() - 0.5) * 90,
+    axis: -1,
+    hitStop: 0,
+    fromTransform,
+    fromOpacity,
+  });
+
+  if (typeof onSlice === 'function') {
+    onSlice({ el: node, rect: sliceRect, piece: true });
+  }
+
+  return true;
 }

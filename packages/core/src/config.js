@@ -31,6 +31,8 @@ export const DEFAULT_CONFIG = {
   allowOversize: false,
   // 显式目标选择器。非空时只按它找目标、忽略面积阈值（关卡玩法用）
   targetSelector: '',
+  // 连切：切下来的碎片还能被再次切开
+  comboCut: true,
 };
 
 export const BASE_SELECTORS = [

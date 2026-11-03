@@ -224,15 +224,38 @@ function createWindow() {
               '})()'
           );
 
-          await sleep(400);
-          const after = await wc.executeJavaScript(
+          await sleep(160);
+          const snap = async () =>
+            wc.executeJavaScript(
+              '(() => {' +
+                ' const frags = Array.from(document.querySelectorAll("[data-adslash-ui]")).filter((n) => n.style.clipPath);' +
+                ' const hud = document.getElementById("cleaner-hud");' +
+                ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
+                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length });' +
+                '})()'
+            );
+
+          console.log('[selftest] after-slash ' + (await snap()));
+
+          // 第二次同向划动：碎片此刻仍在原位附近，应当被再切
+          await wc.executeJavaScript(
             '(() => {' +
-              ' const hud = document.getElementById("cleaner-hud");' +
-              ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
-              ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), probe: window.__probe });' +
+              ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+              ' if (!canvas) return "no-canvas";' +
+              ' const fire = (type, x, yy) => canvas.dispatchEvent(new PointerEvent(type, {' +
+              '   bubbles: true, cancelable: true, clientX: x, clientY: yy,' +
+              '   button: 0, buttons: type === "pointerup" ? 0 : 1, pointerType: "mouse" }));' +
+              ` const x0 = ${x0}, x1 = ${x1}, y = ${y};` +
+              ' fire("pointermove", x0, y);' +
+              ' fire("pointerdown", x0, y);' +
+              ' for (let x = x0; x <= x1; x += 6) fire("pointermove", x, y);' +
+              ' fire("pointerup", x1, y);' +
+              ' return "fired";' +
               '})()'
           );
-          console.log('[selftest] after-slash ' + after);
+
+          await sleep(300);
+          console.log('[selftest] after-combo-cut ' + (await snap()));
         }
       } catch (e) {
         console.log('[selftest] error=' + e.message);

@@ -18,6 +18,7 @@ import {
   timeBonus,
 } from '../packages/core/src/score.js';
 import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
+import { splitPolygon } from '../packages/core/src/pieces.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -401,7 +402,6 @@ await check('单刀结算', () => {
 });
 
 console.log('\n[7] 自由模式计分');
-
 await check('连续快切累积连击', () => {
   const score = createFreeScore();
   const rect = { width: 200, height: 150 }; // 30000 px² → 基础 20 分
@@ -436,6 +436,34 @@ await check('自由模式倍率同样封顶 3 倍', () => {
   assert.equal(score.getState().combo, 12);
   assert.equal(score.getState().score, expected);
   assert.equal(comboMultiplier(12), 3);
+});
+
+console.log('\n[8] 碎片再切');
+
+const SQUARE = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
+];
+
+await check('沿中线把碎片对半分开', () => {
+  const { left, right } = splitPolygon(SQUARE, { x: 0, y: 50 }, 1, 0);
+  assert.ok(left.length >= 3 && right.length >= 3);
+  assert.ok(Math.abs(polygonArea(left) + polygonArea(right) - 10000) < 0.01);
+  assert.ok(Math.abs(polygonArea(left) - polygonArea(right)) < 0.01);
+});
+
+await check('刀线穿过顶点时面积守恒', () => {
+  const { left, right } = splitPolygon(SQUARE, { x: 0, y: 0 }, 1, 1);
+  assert.ok(Math.abs(polygonArea(left) + polygonArea(right) - 10000) < 0.01);
+  assert.ok(Math.abs(polygonArea(left) - polygonArea(right)) < 0.01);
+});
+
+await check('刀线完全在碎片外侧时只产生一块', () => {
+  const { left, right } = splitPolygon(SQUARE, { x: 0, y: -50 }, 1, 0);
+  assert.equal(right.length, 0);
+  assert.ok(Math.abs(polygonArea(left) - 10000) < 0.01);
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

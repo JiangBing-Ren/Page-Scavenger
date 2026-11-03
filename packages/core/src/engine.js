@@ -1,7 +1,8 @@
 import { DEFAULT_CONFIG, SIZE_LEVELS } from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
-import { spawnSparks, spawnDOMFragments } from './fragments.js';
+import { spawnSparks, spawnDOMFragments, reslicePiece } from './fragments.js';
+import { piecesAt, getPiece } from './pieces.js';
 import {
   drawEffects,
   drawTargetBoxes,
@@ -28,6 +29,7 @@ export function createCleaner(options) {
     active: false,
     isDrawing: false,
     activeHits: new Map(),
+    pieceHits: new Map(),
     lockedTargets: new Map(),
     flashes: [],
     particles: [],
@@ -130,6 +132,39 @@ export function createCleaner(options) {
   }
 
   function checkHits(x, y) {
+    checkDomHits(x, y);
+    if (CONFIG.comboCut) checkPieceHits(x, y);
+  }
+
+  // 连切：碎片进入/离开判定，与元素一致——从一侧进、另一侧出才算贯穿
+  function checkPieceHits(x, y) {
+    const hits = piecesAt(x, y, now());
+    const stillInside = new Set();
+    for (const item of hits) stillInside.add(item.id);
+
+    for (const [id, entry] of state.pieceHits) {
+      if (stillInside.has(id)) continue;
+
+      state.pieceHits.delete(id);
+      const item = getPiece(id);
+      if (!item || !item.node.isConnected) continue;
+
+      const rect = item.node.getBoundingClientRect();
+      const dx = Math.abs(x - entry.x);
+      const dy = Math.abs(y - entry.y);
+
+      if (dx > rect.width * CONFIG.pierceRatio || dy > rect.height * CONFIG.pierceRatio) {
+        spawnSparks(state.particles, rect, { x, y }, { x: x - entry.x, y: y - entry.y });
+        reslicePiece(item, entry, { x, y }, 0, onSlash);
+      }
+    }
+
+    for (const item of hits) {
+      if (!state.pieceHits.has(item.id)) state.pieceHits.set(item.id, { x, y });
+    }
+  }
+
+  function checkDomHits(x, y) {
     for (const [el, entry] of state.activeHits.entries()) {
       if (state.lockedTargets.has(el)) {
         state.activeHits.delete(el);
@@ -223,6 +258,7 @@ export function createCleaner(options) {
 
     state.isDrawing = true;
     state.activeHits.clear();
+    state.pieceHits.clear();
     state.lockedTargets.clear();
 
     const pt = { x: e.clientX, y: e.clientY, t: now() };
@@ -261,6 +297,7 @@ export function createCleaner(options) {
     state.isDrawing = false;
     state.prevPoint = null;
     state.activeHits.clear();
+    state.pieceHits.clear();
 
     if (CONFIG.executeOnRelease && state.lockedTargets.size > 0) {
       const targets = Array.from(state.lockedTargets.entries());
