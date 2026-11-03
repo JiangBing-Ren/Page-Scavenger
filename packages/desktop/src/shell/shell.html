@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+    />
+    <title>页面清道夫</title>
+    <link rel="stylesheet" href="shell.css" />
+  </head>
+  <body>
+    <header id="toolbar">
+      <div class="row nav">
+        <button id="back" class="icon" type="button" title="后退">←</button>
+        <button id="reload" class="icon" type="button" title="刷新">⟳</button>
+        <button id="home" class="icon" type="button" title="起始页">⌂</button>
+        <input
+          id="addr"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="输入网址或搜索词，回车打开"
+        />
+        <button id="toggle" class="toggle" type="button">开始斩击</button>
+        <button id="guide" class="ghost" type="button">装到我的浏览器</button>
+      </div>
+
+      <div class="row opts">
+        <label>挡位<select id="size"></select></label>
+        <label>顿感<select id="hitStop"></select></label>
+        <label class="check"><input id="onRelease" type="checkbox" />松手再切</label>
+        <label class="check"><input id="force" type="checkbox" />自由切割</label>
+        <span id="status" class="status"></span>
+      </div>
+    </header>
+
+    <script src="shell.js"></script>
+  </body>
+</html>

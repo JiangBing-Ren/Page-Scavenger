@@ -23,6 +23,7 @@ node scripts/test.mjs    # 几何 / 参数 / 产物 / manifest 校验
 | `packages/core` | 斩击引擎：判定、切分、特效、渲染循环 |
 | `packages/extension` | MV3 外壳：内容脚本、后台、弹窗、教程关 |
 | `packages/userscript` | 油猴适配层 |
+| `packages/desktop` | Electron 桌面版：内置浏览器 + 扩展安装导览 |
 | `scripts` | 构建、图标生成、校验 |
 | `legacy` | 改造前的单文件版本，仅作对照，不再更新 |
 

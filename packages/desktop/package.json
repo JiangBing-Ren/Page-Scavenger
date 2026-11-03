@@ -1,0 +1,8 @@
+{
+  "name": "page-cleaner-desktop",
+  "productName": "页面清道夫",
+  "version": "0.5.0",
+  "private": true,
+  "description": "页面清道夫桌面版：内置浏览器 + 扩展安装导览",
+  "main": "src/main.js"
+}

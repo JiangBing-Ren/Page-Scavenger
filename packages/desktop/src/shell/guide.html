@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    />
+    <title>装到你自己的浏览器</title>
+    <link rel="stylesheet" href="shell.css" />
+    <style>
+      body {
+        overflow: auto;
+        user-select: text;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 26px 24px 48px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        letter-spacing: 1px;
+      }
+      .lead {
+        margin: 0 0 22px;
+        color: var(--muted);
+      }
+      ul.browsers {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+      ul.browsers li {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #121821;
+        padding: 14px 16px;
+      }
+      .b-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .b-name {
+        font-weight: 600;
+      }
+      .tag {
+        font-size: 11px;
+        color: #00ffcc;
+        border: 1px solid #145043;
+        background: #0c2a24;
+        border-radius: 999px;
+        padding: 1px 8px;
+      }
+      .b-head button {
+        margin-left: auto;
+        font-size: 12px;
+        padding: 5px 10px;
+      }
+      ol {
+        margin: 0 0 10px;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      ol li {
+        margin-bottom: 3px;
+      }
+      ol b {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .path-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      code.path {
+        flex: 1 1 auto;
+        display: block;
+        padding: 7px 10px;
+        background: #0f1319;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font: 11.5px/1.5 ui-monospace, Consolas, monospace;
+        color: #9fd8ff;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .path-row button {
+        font-size: 12px;
+        padding: 5px 9px;
+      }
+      .empty {
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+        padding: 18px;
+        text-align: center;
+      }
+      .foot {
+        margin-top: 24px;
+        font-size: 12px;
+        color: #6c7a8c;
+      }
+      .foot a {
+        color: #9fd8ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>装到你自己的浏览器</h1>
+      <p class="lead">
+        桌面版随时能玩。想把斩击带进日常浏览，把扩展目录加载到你自己的浏览器即可——不需要账号。
+      </p>
+
+      <ul id="browsers" class="browsers"></ul>
+
+      <p class="foot">
+        浏览器只允许通过「加载已解压的扩展程序」安装未上架商店的扩展，见
+        <a
+          href="https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked"
+          target="_blank"
+          rel="noreferrer"
+          >Chrome 官方文档</a
+        >。扩展目录由本程序提供，移动或卸载本程序会导致扩展失效。
+      </p>
+    </main>
+
+    <script src="guide.js"></script>
+  </body>
+</html>

@@ -195,6 +195,27 @@ async function main() {
     await writeBundle('packages/userscript/src/index.js', 'dist/页面清道夫.user.js', banner)
   );
 
+  // 桌面版
+  results.push(
+    await writeBundle('packages/desktop/src/page-preload.js', 'dist/desktop/page-preload.js')
+  );
+  results.push(
+    await writeBundle(
+      'packages/desktop/src/shell/shell-preload.js',
+      'dist/desktop/shell/shell-preload.js'
+    )
+  );
+  results.push(
+    await writeBundle('packages/desktop/src/shell/shell.js', 'dist/desktop/shell/shell.js')
+  );
+  results.push(
+    await writeBundle('packages/desktop/src/shell/guide.js', 'dist/desktop/shell/guide.js')
+  );
+
+  for (const file of ['shell.html', 'shell.css', 'welcome.html', 'guide.html']) {
+    await copyFile(`packages/desktop/src/shell/${file}`, `dist/desktop/shell/${file}`);
+  }
+
   for (const r of results) {
     console.log(`  ${String(r.bytes).padStart(7)} B  ${r.outRel}`);
   }

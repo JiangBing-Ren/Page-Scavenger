@@ -46,6 +46,30 @@
 - **自由切割**：不限于广告选择器，任意元素都可切
 - **刷新后自动清理**：记住切过的元素，再次访问同域名时自动隐藏
 
+## 桌面版（开发中）
+
+`packages/desktop` 是一个 Electron 外壳：**内置浏览器直接用同一份引擎玩**，并附带一个「装到你自己的浏览器」导览。
+
+```bash
+npm install      # 仅首次；Electron 二进制约 250MB
+npm run build
+npm run desktop
+```
+
+- **内置浏览器**：`WebContentsView` 承载页面，`page-preload` 注入 `packages/core`，与扩展共用同一套手感
+- **安装导览**：自动探测本机 Chrome / Edge / Brave / Vivaldi / Opera / Firefox，给出逐步操作，可直接打开对应浏览器的扩展管理页并复制扩展目录
+- **快捷键**：`Alt+S` 开关斩击，`Esc` 退出
+- **自检**：`ADSLASH_SELFTEST=1 npm run desktop` 会自动激活并把 canvas 尺寸打到 stdout，用于验证注入链路
+
+国内网络访问 npm 官方源很慢，可在仓库根目录放一个 `.npmrc`（已被 `.gitignore` 排除）指定镜像：
+
+```ini
+registry=https://registry.npmmirror.com
+electron_mirror=https://npmmirror.com/mirrors/electron/
+```
+
+打包与 Steam 集成尚未配置。
+
 ## 从源码构建
 
 只需要 Node.js（无需 npm 安装任何依赖，构建链零第三方依赖）：
@@ -77,6 +101,7 @@ packages/
     engine.js      状态机、指针事件、渲染循环
   extension/     MV3 扩展外壳
   userscript/    油猴适配层（复用同一份 core）
+  desktop/       桌面版：Electron 内置浏览器 + 扩展安装导览
 scripts/
   build.mjs      零依赖打包（ESM → IIFE）
   make-icons.mjs 程序化生成图标
@@ -95,7 +120,8 @@ legacy/          改造前的单文件版本，仅作对照
 
 - [ ] 一键录制「这次拆迁」并导出视频，方便分享
 - [ ] 内置关卡与评分（教程关已具备基础框架）
-- [ ] 桌面版：内置浏览器 + 扩展安装导览
+- [x] 桌面版：内置浏览器 + 扩展安装导览（Electron，可运行，未打包）
+- [ ] Steam 打包与 Steamworks 集成
 - [ ] Chrome Web Store / Edge Add-ons 上架
 
 ## 支持开发

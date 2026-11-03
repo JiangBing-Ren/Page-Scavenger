@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    />
+    <title>页面清道夫</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(1200px 600px at 50% -10%, #17202c, #0a0d12 70%);
+        color: #e9eef6;
+        font: 14px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        padding: 40px 24px;
+      }
+      main {
+        width: 100%;
+        max-width: 720px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 30px;
+        letter-spacing: 2px;
+      }
+      .sub {
+        margin: 0 0 28px;
+        color: #8593a5;
+      }
+      .steps {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+      .step {
+        display: flex;
+        gap: 14px;
+        padding: 14px 16px;
+        border: 1px solid #242b36;
+        border-radius: 12px;
+        background: #121821;
+      }
+      .step b {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #10312a;
+        color: #00ffcc;
+        font-size: 13px;
+      }
+      .step p {
+        margin: 0;
+      }
+      .step small {
+        color: #8593a5;
+      }
+      kbd {
+        background: #1b2029;
+        border: 1px solid #2b3442;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font: 12px/1 ui-monospace, monospace;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 26px;
+      }
+      .links a {
+        color: #9fd8ff;
+        border: 1px solid #24384a;
+        background: #101923;
+        border-radius: 999px;
+        padding: 6px 12px;
+        text-decoration: none;
+        font-size: 13px;
+      }
+      .links a:hover {
+        border-color: #00ffcc;
+        color: #00ffcc;
+      }
+      .foot {
+        color: #6c7a8c;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>页面清道夫</h1>
+      <p class="sub">按住鼠标左键划过网页元素，刀光所至，直接斩断。</p>
+
+      <div class="steps">
+        <div class="step">
+          <b>1</b>
+          <p>在地址栏输入任意网址，回车打开<small>——这里就是内置浏览器，任何网站都能玩。</small></p>
+        </div>
+        <div class="step">
+          <b>2</b>
+          <p>
+            点右上角「开始斩击」，然后按住左键划过目标<small
+              >——要从一侧进、另一侧出才算贯穿命中。</small
+            >
+          </p>
+        </div>
+        <div class="step">
+          <b>3</b>
+          <p>
+            想在自己的浏览器里玩？点「装到我的浏览器」<small>——会给你逐步导览。</small>
+          </p>
+        </div>
+      </div>
+
+      <div class="links">
+        <a href="https://www.runoob.com/">菜鸟教程</a>
+        <a href="https://news.ycombinator.com/">Hacker News</a>
+        <a href="https://example.com/">example.com</a>
+      </div>
+
+      <p class="foot">
+        快捷键：<kbd>Alt</kbd>+<kbd>S</kbd> 开关斩击 · <kbd>Esc</kbd> 退出斩击模式
+      </p>
+    </main>
+  </body>
+</html>
