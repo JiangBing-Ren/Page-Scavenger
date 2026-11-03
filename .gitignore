@@ -2,6 +2,9 @@
 node_modules/
 dist/
 
+# 本机 npm 配置（镜像源因地区而异，不分发）
+.npmrc
+
 # 打包/签名产物
 *.crx
 *.pem
