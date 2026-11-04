@@ -272,25 +272,38 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
   };
 
   const grow = (origin, angle, length, width, depth) => {
-    const steps = 4 + Math.floor(Math.random() * 3);
+    const steps = 4 + Math.floor(Math.random() * 4);
     const points = [origin];
     const stepLen = length / steps;
+
+    // 每条裂缝自己的弯曲倾向 + 局部抖动，避免所有裂缝同一种折线
+    const curvature = (Math.random() - 0.5) * 1.4;
+    const jitter = 0.2 + Math.random() * 0.5;
+    // 收窄指数：小的掉得快，大的能拖很长
+    const taper = 0.55 + Math.random() * 1.15;
+    // 宽度沿程起伏幅度
+    const wobble = 0.12 + Math.random() * 0.38;
 
     let a = angle;
     let x = origin.x;
     let y = origin.y;
 
     for (let i = 0; i < steps; i++) {
-      a += (Math.random() - 0.5) * 0.9; // 每段都拐一点，避免直线
+      a += curvature / steps + (Math.random() - 0.5) * jitter;
       x += Math.cos(a) * stepLen;
       y += Math.sin(a) * stepLen;
       points.push({ x, y });
     }
 
     const widths = points.map((_, i) => {
-      const k = 1 - i / (points.length - 1);
-      return Math.max(0.7, width * (0.3 + k * 0.7));
+      const t = i / (points.length - 1);
+      const base = Math.pow(1 - t, taper);
+      const noise = 1 + (Math.random() - 0.5) * 2 * wobble;
+      return Math.max(0.6, width * base * noise + 0.4);
     });
+
+    // 与裂口衔接处加粗，避免根部比中间还细
+    widths[0] = width * (1.1 + Math.random() * 0.5);
 
     cracks.push(oriented(toRibbon(points, widths)));
 
@@ -304,8 +317,8 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
       grow(
         p,
         a + side * (0.45 + Math.random() * 0.55),
-        length * (0.32 + Math.random() * 0.28),
-        widths[idx] * 0.62,
+        length * (0.22 + Math.random() * 0.4),
+        widths[idx] * (0.45 + Math.random() * 0.35),
         depth - 1
       );
     }
@@ -319,7 +332,12 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
       x: lx + Math.cos(angle) * startR,
       y: ly + Math.sin(angle) * startR,
     };
-    grow(origin, angle, r * (0.9 + Math.random() * 1.1), Math.max(4, r * 0.14), 1);
+
+    // 长短、粗细各自独立浮动，避免五条裂缝看起来一个样
+    const lengthMul = 0.5 + Math.random() * 1.9;
+    const widthMul = 0.5 + Math.random() * 1.2;
+
+    grow(origin, angle, r * lengthMul, Math.max(3, r * 0.14) * widthMul, 1);
   }
 
   const pathData =
