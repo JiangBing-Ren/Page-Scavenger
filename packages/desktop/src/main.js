@@ -282,10 +282,12 @@ function createWindow() {
             wc.executeJavaScript(
               '(() => {' +
                 ' const frags = Array.from(document.querySelectorAll("[data-adslash-ui]")).filter((n) => n.style.clipPath);' +
-                ' const holes = frags.filter((n) => n.style.maskImage || n.style.webkitMaskImage).length;' +
+                ' const masked = frags.filter((n) => n.style.maskImage || n.style.webkitMaskImage);' +
+                ' const holes = masked.length;' +
+                ' const badMasks = masked.filter((n) => (n.style.maskImage || "").indexOf("NaN") >= 0).length;' +
                 ' const hud = document.getElementById("cleaner-hud");' +
                 ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
-                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes });' +
+                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes, badMasks });' +
                 '})()'
             );
 

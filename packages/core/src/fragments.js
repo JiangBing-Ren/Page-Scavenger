@@ -246,44 +246,80 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
     });
   }
 
-  // 2) 裂缝：真正切开的渐宽缝隙（不是画黑线），从裂口向外收窄
+  // 2) 裂缝：递归生长，每段随机转折并分叉，像真实裂开的纹理
   const cracks = [];
-  const crackCount = 7;
-  for (let i = 0; i < crackCount; i++) {
-    const base = (i / crackCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.55;
-    const bend = (Math.random() - 0.5) * 0.5;
-    const startR = r * (0.72 + Math.random() * 0.16);
-    const total = r * (0.95 + Math.random() * 1.5);
 
-    const start = { x: lx + Math.cos(base) * startR, y: ly + Math.sin(base) * startR };
-    const midAngle = base + bend * 0.5;
-    const mid = {
-      x: lx + Math.cos(midAngle) * (startR + total * 0.5),
-      y: ly + Math.sin(midAngle) * (startR + total * 0.5),
+  // 把折线加宽成ribbon多边形（左右各偏移一半宽度）
+  const toRibbon = (points, widths) => {
+    const left = [];
+    const right = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const prev = points[i - 1] || points[i];
+      const next = points[i + 1] || points[i];
+      let dx = next.x - prev.x;
+      let dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const half = Math.max(0.6, widths[i] / 2);
+
+      left.push({ x: points[i].x + nx * half, y: points[i].y + ny * half });
+      right.push({ x: points[i].x - nx * half, y: points[i].y - ny * half });
+    }
+
+    return [...left, ...right.reverse()];
+  };
+
+  const grow = (origin, angle, length, width, depth) => {
+    const steps = 4 + Math.floor(Math.random() * 3);
+    const points = [origin];
+    const stepLen = length / steps;
+
+    let a = angle;
+    let x = origin.x;
+    let y = origin.y;
+
+    for (let i = 0; i < steps; i++) {
+      a += (Math.random() - 0.5) * 0.9; // 每段都拐一点，避免直线
+      x += Math.cos(a) * stepLen;
+      y += Math.sin(a) * stepLen;
+      points.push({ x, y });
+    }
+
+    const widths = points.map((_, i) => {
+      const k = 1 - i / (points.length - 1);
+      return Math.max(0.7, width * (0.3 + k * 0.7));
+    });
+
+    cracks.push(oriented(toRibbon(points, widths)));
+
+    if (depth <= 0) return;
+
+    const branches = Math.random() > 0.5 ? 2 : 1;
+    for (let b = 0; b < branches; b++) {
+      const idx = 1 + Math.floor(Math.random() * Math.max(1, points.length - 2));
+      const p = points[idx];
+      const side = Math.random() > 0.5 ? 1 : -1;
+      grow(
+        p,
+        a + side * (0.45 + Math.random() * 0.55),
+        length * (0.32 + Math.random() * 0.28),
+        widths[idx] * 0.62,
+        depth - 1
+      );
+    }
+  };
+
+  const mainCracks = 5;
+  for (let i = 0; i < mainCracks; i++) {
+    const angle = (i / mainCracks) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    const startR = r * (0.62 + Math.random() * 0.18);
+    const origin = {
+      x: lx + Math.cos(angle) * startR,
+      y: ly + Math.sin(angle) * startR,
     };
-    const endAngle = base + bend;
-    const end = {
-      x: lx + Math.cos(endAngle) * (startR + total),
-      y: ly + Math.sin(endAngle) * (startR + total),
-    };
-
-    const wide = Math.max(4, r * 0.19);
-    const thin = Math.max(1.4, wide * 0.18);
-
-    const n0 = { x: -Math.sin(base), y: Math.cos(base) };
-    const n1 = { x: -Math.sin(midAngle), y: Math.cos(midAngle) };
-    const n2 = { x: -Math.sin(endAngle), y: Math.cos(endAngle) };
-
-    cracks.push(
-      oriented([
-        { x: start.x + n0.x * wide * 0.5, y: start.y + n0.y * wide * 0.5 },
-        { x: mid.x + n1.x * wide * 0.34, y: mid.y + n1.y * wide * 0.34 },
-        { x: end.x + n2.x * thin * 0.5, y: end.y + n2.y * thin * 0.5 },
-        { x: end.x - n2.x * thin * 0.5, y: end.y - n2.y * thin * 0.5 },
-        { x: mid.x - n1.x * wide * 0.34, y: mid.y - n1.y * wide * 0.34 },
-        { x: start.x - n0.x * wide * 0.5, y: start.y - n0.y * wide * 0.5 },
-      ])
-    );
+    grow(origin, angle, r * (0.9 + Math.random() * 1.1), Math.max(4, r * 0.14), 1);
   }
 
   const pathData =
