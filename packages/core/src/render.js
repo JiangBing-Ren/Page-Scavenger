@@ -307,7 +307,7 @@ export function updateParticles(ctx, state) {
       p.vx *= 0.98;
       p.vy *= 0.99;
       p.life -= p.decay;
-      p.size += 0.45;
+      p.size += 0.16;
     } else {
       p.vy += p.isChunk ? 1.2 : 0.8;
       p.vx *= 0.96;
@@ -397,32 +397,74 @@ export function drawChambers(ctx, state, config) {
   if (!config || config.weapon !== 'revolver') return;
 
   const total = Math.max(1, Math.floor(config.revolverChambers) || 6);
-  const size = 16;
-  const gap = 8;
-  const x0 = 22;
-  const y0 = Math.max(40, state.cssH - 96);
+  const R = 21;
+  const cx = 24 + R;
+  const cy = Math.max(R + 8, state.cssH - 96);
+  const reloading = state.reloadingUntil > now();
+  const reloadMs = Math.max(1, config.revolverReloadMs || 900);
+
+  // 换弹时弹巢旋转
+  let spin = 0;
+  if (reloading) {
+    const elapsed = reloadMs - (state.reloadingUntil - now());
+    spin = (elapsed / reloadMs) * Math.PI * 2;
+  }
 
   ctx.save();
 
+  // 弹巢主体
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(16, 19, 25, 0.92)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 214, 140, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 边缘凹槽：每两个弹室之间一道缺口
+  ctx.strokeStyle = 'rgba(255, 214, 140, 0.45)';
+  ctx.lineWidth = 1.6;
   for (let i = 0; i < total; i++) {
-    const cx = x0 + i * (size + gap) + size / 2;
+    const a = -Math.PI / 2 + spin + ((i + 0.5) / total) * Math.PI * 2;
     ctx.beginPath();
-    ctx.arc(cx, y0, size / 2, 0, Math.PI * 2);
+    ctx.moveTo(cx + Math.cos(a) * R * 0.82, cy + Math.sin(a) * R * 0.82);
+    ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+    ctx.stroke();
+  }
+
+  // 六个弹室
+  const orbit = R * 0.58;
+  const chamberR = R * 0.24;
+
+  for (let i = 0; i < total; i++) {
+    const a = -Math.PI / 2 + spin + (i / total) * Math.PI * 2;
+    const x = cx + Math.cos(a) * orbit;
+    const y = cy + Math.sin(a) * orbit;
+
+    ctx.beginPath();
+    ctx.arc(x, y, chamberR, 0, Math.PI * 2);
 
     if (i < state.chambers) {
-      ctx.fillStyle = 'rgba(255, 214, 140, 0.9)';
+      ctx.fillStyle = 'rgba(255, 214, 140, 0.92)';
       ctx.fill();
     } else {
-      ctx.strokeStyle = 'rgba(255, 214, 140, 0.32)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 214, 140, 0.4)';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
     }
   }
 
-  if (state.reloadingUntil > now()) {
+  // 中心轴
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * 0.11, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 214, 140, 0.55)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  if (reloading) {
     ctx.fillStyle = 'rgba(255, 214, 140, 0.85)';
     ctx.font = '12px system-ui, -apple-system, sans-serif';
-    ctx.fillText('换弹中…', x0, y0 + 26);
+    ctx.fillText('换弹中…', cx - 18, cy + R + 18);
   }
 
   ctx.restore();

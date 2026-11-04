@@ -39,7 +39,7 @@ export const DEFAULT_CONFIG = {
   comboCut: true,
   // 音效（Web Audio 现场合成，无音频文件）
   soundEnabled: true,
-  soundVolume: 0.5,
+  soundVolume: 0.6,
   // 逐刀切割节奏：每刀间隔从 base 起按 decay 递减，不低于 min
   cutStepBase: 170,
   cutStepDecay: 0.72,

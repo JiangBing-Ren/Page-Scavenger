@@ -127,7 +127,7 @@ export function createSound(getConfig) {
     src.stop(t + 0.3);
   }
 
-  // 枪声：左轮厚重、机枪轻快
+  // 枪声：左轮低频闷响 + 锐利爆裂；机枪高频短促的「哒」
   function shot(kind) {
     if (!enabled()) return;
     const ctx = ready();
@@ -137,35 +137,63 @@ export function createSound(getConfig) {
     const t = ctx.currentTime;
     const vol = volume();
 
-    // 枪口爆音
+    if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
+
+    if (heavy) {
+      const boom = ctx.createOscillator();
+      const bg = ctx.createGain();
+      boom.type = 'sine';
+      boom.frequency.setValueAtTime(150, t);
+      boom.frequency.exponentialRampToValueAtTime(42, t + 0.32);
+      bg.gain.setValueAtTime(0.5 * vol, t);
+      bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+      boom.connect(bg).connect(ctx.destination);
+      boom.start(t);
+      boom.stop(t + 0.4);
+
+      const src = ctx.createBufferSource();
+      src.buffer = cachedNoise;
+
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 1200;
+
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.42 * vol, t);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+
+      src.connect(hp).connect(ng).connect(ctx.destination);
+      src.start(t);
+      src.stop(t + 0.1);
+      return;
+    }
+
     const osc = ctx.createOscillator();
     const og = ctx.createGain();
-    osc.type = heavy ? 'sawtooth' : 'square';
-    osc.frequency.setValueAtTime(heavy ? 700 : 980, t);
-    osc.frequency.exponentialRampToValueAtTime(heavy ? 85 : 240, t + (heavy ? 0.15 : 0.06));
-    og.gain.setValueAtTime((heavy ? 0.26 : 0.13) * vol, t);
-    og.gain.exponentialRampToValueAtTime(0.0001, t + (heavy ? 0.22 : 0.08));
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1500, t);
+    osc.frequency.exponentialRampToValueAtTime(620, t + 0.045);
+    og.gain.setValueAtTime(0.22 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
     osc.connect(og).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + (heavy ? 0.24 : 0.09));
+    osc.stop(t + 0.07);
 
-    // 火药碎裂声
-    if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
     const src = ctx.createBufferSource();
     src.buffer = cachedNoise;
 
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = heavy ? 900 : 2300;
-    bp.Q.value = heavy ? 0.9 : 1.4;
+    bp.frequency.value = 2600;
+    bp.Q.value = 1.6;
 
     const ng = ctx.createGain();
-    ng.gain.setValueAtTime((heavy ? 0.3 : 0.15) * vol, t);
-    ng.gain.exponentialRampToValueAtTime(0.0001, t + (heavy ? 0.28 : 0.07));
+    ng.gain.setValueAtTime(0.2 * vol, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
 
     src.connect(bp).connect(ng).connect(ctx.destination);
     src.start(t);
-    src.stop(t + (heavy ? 0.3 : 0.09));
+    src.stop(t + 0.05);
   }
 
   // 换弹：两声金属咔哒 + 弹仓旋转的低沉尾声
@@ -196,20 +224,20 @@ export function createSound(getConfig) {
       src.stop(t + 0.08);
     };
 
-    clickAt(0, 2400, 0.34);
-    clickAt(0.13, 1500, 0.26);
+    clickAt(0, 2400, 0.5);
+    clickAt(0.13, 1500, 0.4);
 
     const t = ctx.currentTime + 0.02;
     const osc = ctx.createOscillator();
     const og = ctx.createGain();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(90, t + 0.12);
-    og.gain.setValueAtTime(0.1 * vol, t);
-    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    osc.frequency.setValueAtTime(240, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+    og.gain.setValueAtTime(0.18 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
     osc.connect(og).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.15);
+    osc.stop(t + 0.34);
   }
 
   return { slice, burst, shot, reload, unlock: ready };

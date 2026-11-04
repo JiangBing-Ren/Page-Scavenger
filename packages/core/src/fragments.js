@@ -57,21 +57,21 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
   }
 }
 
-// 弹孔升腾的烟雾（左轮）
+// 弹孔升腾的烟雾（左轮）：颗粒更小更密，只轻轻上浮
 export function spawnSmoke(particles, cx, cy, radius) {
-  const count = 14;
+  const count = 26;
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius * 0.7;
+    const dist = Math.random() * radius * 0.55;
     particles.push({
       x: cx + Math.cos(angle) * dist,
       y: cy + Math.sin(angle) * dist,
-      vx: (Math.random() - 0.5) * 10,
-      vy: -10 - Math.random() * 16,
-      size: radius * (0.22 + Math.random() * 0.3),
-      color: 'rgba(205, 205, 205, 0.34)',
+      vx: (Math.random() - 0.5) * 6,
+      vy: -3 - Math.random() * 8,
+      size: radius * (0.1 + Math.random() * 0.16),
+      color: 'rgba(212, 212, 212, 0.3)',
       life: 1,
-      decay: 0.007 + Math.random() * 0.006,
+      decay: 0.009 + Math.random() * 0.008,
       isSmoke: true,
     });
   }
