@@ -1,7 +1,13 @@
 import { DEFAULT_CONFIG, SIZE_LEVELS } from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
-import { spawnSparks, spawnDOMFragments, spawnMultiCutFragments, reslicePiece } from './fragments.js';
+import {
+  spawnSparks,
+  spawnDOMFragments,
+  spawnMultiCutFragments,
+  spawnBlastFragments,
+  reslicePiece,
+} from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
 import { WEAPONS, getWeapon, blastSamplePoints } from './weapons.js';
@@ -172,9 +178,7 @@ export function createCleaner(options) {
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.4, alpha: 1 });
 
     for (const target of targets) {
-      const rect = target.getBoundingClientRect();
-      slash(target, { x: cx, y: cy }, { x: 1, y: 0 }, { x: cx, y: cy }, []);
-      spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
+      blastDestroy(target, cx, cy);
     }
 
     if (!targets.length) {
@@ -259,6 +263,42 @@ export function createCleaner(options) {
 
       state.slashCount++;
       onSlash({ el, rect, count: state.slashCount });
+    } catch (e) {
+      console.error(e);
+      hideEl(el);
+    }
+
+    state.pending.delete(el);
+  }
+
+  // 炮的摧毁：不做切线切分，直接把目标炸成网格碎块向外飞散
+  function blastDestroy(el, cx, cy) {
+    if (!el || state.pending.has(el) || state.slashed.has(el)) return;
+
+    state.pending.add(el);
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) {
+      state.pending.delete(el);
+      return;
+    }
+
+    const sel = cssPath(el);
+    const prevStyle = el.getAttribute('style');
+
+    try {
+      hideEl(el);
+      state.slashed.add(el);
+      releaseLift(el);
+      if (sel) addMark(sel);
+
+      state.undoStack.push({ sel, prevStyle });
+      if (state.undoStack.length > 20) state.undoStack.shift();
+
+      spawnBlastFragments(el, rect, cx, cy, CONFIG.hitStop);
+      spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
+
+      state.slashCount++;
+      onSlash({ el, rect, count: state.slashCount, blast: true });
     } catch (e) {
       console.error(e);
       hideEl(el);

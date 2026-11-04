@@ -169,7 +169,11 @@ function makeBuilder(el, rect, box, oversized, filterStr) {
 }
 
 function animate(node, options) {
-  const { nx, speedX, rot, axis, hitStop, fromTransform, fromOpacity } = options;
+  const { nx, speedX, tx, ty, rot, axis, hitStop, fromTransform, fromOpacity } = options;
+
+  // 默认沿用「横向散开 + 向下坠落」；爆破会直接给 tx/ty 做径向飞散
+  const dx = Number.isFinite(tx) ? tx : nx * speedX;
+  const dy = Number.isFinite(ty) ? ty : 600;
 
   const run = () => {
     if (fromTransform) {
@@ -183,7 +187,7 @@ function animate(node, options) {
 
     Object.assign(node.style, {
       transition: trans,
-      transform: `translate3d(${nx * speedX}px, 600px, 0) rotate3d(1, ${axis}, 0, ${rot}deg)`,
+      transform: `translate3d(${dx}px, ${dy}px, 0) rotate3d(1, ${axis}, 0, ${rot}deg)`,
       opacity: '0',
       filter: 'none',
     });
@@ -196,6 +200,66 @@ function animate(node, options) {
 
   if (hitStop > 0) setTimeout(run, hitStop);
   else run();
+}
+
+// 爆破：把目标切成网格状碎块，从爆点向外飞散（区别于刀的一刀两半）
+export function spawnBlastFragments(el, rect, centerX, centerY, hitStop) {
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) {
+    box = visibleBox(rect);
+  }
+  if (box.width < 4 || box.height < 4) return false;
+
+  // 尺寸决定碎块密度，最多 4×4，避免一次爆炸生成过多节点
+  const cols = Math.max(2, Math.min(4, Math.round(box.width / 110)));
+  const rows = Math.max(2, Math.min(4, Math.round(box.height / 110)));
+  const cellW = box.width / cols;
+  const cellH = box.height / rows;
+
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(3) contrast(1.4)');
+  const originX = centerX - box.left;
+  const originY = centerY - box.top;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const poly = [
+        { x: col * cellW, y: row * cellH },
+        { x: (col + 1) * cellW, y: row * cellH },
+        { x: (col + 1) * cellW, y: (row + 1) * cellH },
+        { x: col * cellW, y: (row + 1) * cellH },
+      ];
+
+      const node = build(poly);
+      registerPiece(node, {
+        build,
+        box,
+        polygon: poly,
+        screenCache: null,
+        bornAt: performance.now(),
+      });
+
+      // 从爆点指向碎块中心，决定飞散方向
+      let vx = cellW * (col + 0.5) - originX;
+      let vy = cellH * (row + 0.5) - originY;
+      const dist = Math.hypot(vx, vy) || 1;
+      vx /= dist;
+      vy /= dist;
+
+      const power = 170 + Math.random() * 190;
+
+      animate(node, {
+        tx: vx * power,
+        ty: vy * power + 260,
+        rot: (Math.random() - 0.5) * 280,
+        axis: Math.random() > 0.5 ? 1 : -1,
+        hitStop: hitStop + Math.random() * 70,
+      });
+    }
+  }
+
+  return true;
 }
 
 export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
