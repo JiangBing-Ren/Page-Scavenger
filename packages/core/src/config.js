@@ -44,6 +44,8 @@ export const DEFAULT_CONFIG = {
   cutStepBase: 170,
   cutStepDecay: 0.72,
   cutStepMin: 45,
+  // 当前武器（见 weapons.js）。目前只有 blade 已实现
+  weapon: 'blade',
 };
 
 export const BASE_SELECTORS = [

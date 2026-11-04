@@ -614,6 +614,8 @@ app.whenReady().then(() => {
             '   resets: resetCount,' +
             '   importBtn: !!document.getElementById("import"),' +
             '   dialog: !!document.getElementById("import-dialog"),' +
+            '   weapons: document.querySelectorAll("#weapons .weapon").length,' +
+            '   activeWeapon: !!document.querySelector("#weapons .weapon.active"),' +
             '   host: (document.getElementById("host") || {}).textContent || "",' +
             ' };' +
             ' const dlg = document.getElementById("import-dialog");' +

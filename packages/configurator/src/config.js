@@ -6,6 +6,7 @@ import {
   HIT_STOP_LABELS,
 } from '../../core/src/config.js';
 import { createCleaner } from '../../core/src/engine.js';
+import { WEAPONS, WEAPON_GROUPS } from '../../core/src/weapons.js';
 
 const ext = typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null;
 const isExt = !!(ext && ext.storage && ext.runtime && ext.runtime.id);
@@ -183,6 +184,52 @@ function fieldRow(field) {
   return row;
 }
 
+function renderWeapons() {
+  const container = $('weapons');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const weapon of WEAPONS) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className =
+      'weapon' +
+      (weapon.id === draft.weapon ? ' active' : '') +
+      (weapon.implemented ? '' : ' locked');
+    card.disabled = !weapon.implemented;
+
+    const head = document.createElement('div');
+    head.className = 'weapon-head';
+
+    const name = document.createElement('b');
+    name.textContent = weapon.name;
+
+    const badge = document.createElement('span');
+    badge.className = 'badge' + (weapon.implemented ? '' : ' muted');
+    badge.textContent = weapon.implemented ? '已实现' : '未实现';
+
+    head.append(name, badge);
+
+    const meta = document.createElement('div');
+    meta.className = 'weapon-group';
+    meta.textContent = (WEAPON_GROUPS[weapon.group] || weapon.group) + ' · ' + weapon.input;
+
+    const desc = document.createElement('p');
+    desc.className = 'weapon-desc';
+    desc.textContent = weapon.desc;
+
+    card.append(head, meta, desc);
+
+    card.addEventListener('click', () => {
+      draft.weapon = weapon.id;
+      renderWeapons();
+      markDirty();
+    });
+
+    container.appendChild(card);
+  }
+}
+
 function renderAll() {
   for (const [containerId, fields] of [
     ['basic', BASIC_FIELDS],
@@ -192,6 +239,7 @@ function renderAll() {
     container.innerHTML = '';
     for (const field of fields) container.appendChild(fieldRow(field));
   }
+  renderWeapons();
   markDirty();
 }
 
@@ -208,6 +256,7 @@ function syncControls() {
       input.disabled = false;
     }
   }
+  renderWeapons();
   markDirty();
 }
 
@@ -307,6 +356,13 @@ function applyImport(text) {
     const ok =
       typeof value === expected && (expected !== 'number' || Number.isFinite(value));
     if (!ok) continue;
+
+    // 武器只接受已实现的，避免导入后切到空实现
+    if (key === 'weapon') {
+      const target = WEAPONS.find((item) => item.id === value);
+      if (!target || !target.implemented) continue;
+    }
+
     draft[key] = value;
     count++;
   }

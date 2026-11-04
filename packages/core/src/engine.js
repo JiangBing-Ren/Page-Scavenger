@@ -4,6 +4,7 @@ import { findSlashTarget } from './targeting.js';
 import { spawnSparks, spawnDOMFragments, spawnMultiCutFragments, reslicePiece } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
+import { WEAPONS, getWeapon } from './weapons.js';
 import {
   drawEffects,
   drawTargetBoxes,
@@ -100,6 +101,27 @@ export function createCleaner(options) {
 
   function releaseAllLifts() {
     for (const el of Array.from(lifted.keys())) releaseLift(el);
+  }
+
+  function currentWeapon() {
+    const weapon = getWeapon(CONFIG.weapon);
+    // 存储里若残留未实现的武器（例如手改存储），回退到刀，避免切击直接失灵
+    if (weapon && weapon.implemented) return weapon;
+    return getWeapon('blade');
+  }
+
+  // 目前只有「输入方式为拖动」的武器能走斩击路径，其余武器实现前不响应输入
+  function canSlash() {
+    const weapon = currentWeapon();
+    return !!(weapon && weapon.implemented && weapon.input === 'drag');
+  }
+
+  function setWeapon(id) {
+    const weapon = getWeapon(id);
+    if (!weapon) return { ok: false, reason: 'unknown' };
+    if (!weapon.implemented) return { ok: false, reason: 'not-implemented' };
+    CONFIG.weapon = weapon.id;
+    return { ok: true, weapon: weapon.id };
   }
 
   const saveMarks = () => {
@@ -441,6 +463,9 @@ export function createCleaner(options) {
     }
 
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    // 未实现的武器不响应输入（框架阶段只有刀可用）
+    if (!canSlash()) return;
 
     e.preventDefault();
 
@@ -794,10 +819,15 @@ export function createCleaner(options) {
     clearMarks,
     getMarkCount: () => state.marks.length,
     getSlashCount: () => state.slashCount,
+    // 武器框架
+    getWeapons: () => WEAPONS,
+    getWeapon: () => currentWeapon(),
+    setWeapon,
     // 调试/自检用：不参与游戏逻辑
     getDebugState: () => ({
       active: state.active,
       drawing: state.isDrawing,
+      weapon: CONFIG.weapon,
       activeHits: state.activeHits.size,
       locked: state.lockedTargets.size,
       cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),

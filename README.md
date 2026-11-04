@@ -39,6 +39,34 @@
 
 扩展保存后会向所有已打开的标签页广播配置；桌面版写入 `settings.json` 并推给当前页面。
 
+## 武器系统
+
+框架已就位，**目前只有「刀」实现**，其余为占位。定义在 `packages/core/src/weapons.js`。
+
+| id | 名称 | 类别 | 输入 | 状态 |
+| --- | --- | --- | --- | --- |
+| `blade` | 刀 | 近战 | drag | 已实现 |
+| `spear` | 枪 | 近战 | drag | 占位 |
+| `sword` | 剑 | 近战 | drag | 占位 |
+| `cannon` | 炮 | 重火力 | click | 占位 |
+| `pistol` | 手枪 | 枪械 | click | 占位 |
+| `machinegun` | 机枪 | 枪械 | hold | 占位 |
+| `laser` | 激光炮 | 重火力 | hold | 占位 |
+| `grenade` | 手雷 | 投掷物 | drop | 占位 |
+| `shell` | 榴弹 | 投掷物 | drop | 占位 |
+| `snake` | 贪吃蛇 | 特殊 | drag | 占位 |
+| `blackhole` | 黑洞 | 特殊 | drop | 占位 |
+
+输入类型约定：`drag` 按住拖动（贯穿判定）、`click` 单击一次、`hold` 按住持续生效、`drop` 放置或投掷后延时生效。
+
+新增一把武器要动三处：
+
+1. `weapons.js` 补定义，把 `implemented` 改成 `true`
+2. `engine.js` 按它的 `input` 接对应输入分支（目前只有 drag 路径）
+3. 实现命中与表现，可复用 `spawnDOMFragments` / `reslicePiece` / `spawnSparks`
+
+引擎 API：`getWeapons()` / `getWeapon()` / `setWeapon(id)`。`setWeapon` 只接受已实现的武器并返回 `{ ok, reason }`；存储里若残留未实现的 id，会回退到刀，不会让斩击失灵。
+
 ## 使用
 
 | 操作 | 说明 |

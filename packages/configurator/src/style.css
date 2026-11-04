@@ -81,6 +81,77 @@ details.card[open] summary {
   margin-bottom: 12px;
 }
 
+.weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.weapon {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111722;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.weapon:hover:not(:disabled) {
+  border-color: #0aa47f;
+}
+
+.weapon.active {
+  border-color: var(--accent);
+  background: #0f2a24;
+}
+
+.weapon:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.weapon-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.weapon-head b {
+  font-size: 13px;
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid #145043;
+  background: #0c2a24;
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.badge.muted {
+  color: #6c7a8c;
+  border-color: #2b3442;
+  background: transparent;
+}
+
+.weapon-group {
+  font-size: 11px;
+  color: #6c7a8c;
+}
+
+.weapon-desc {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

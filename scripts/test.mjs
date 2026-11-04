@@ -19,6 +19,7 @@ import {
 } from '../packages/core/src/score.js';
 import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
 import { splitPolygon, splitPolygonMany } from '../packages/core/src/pieces.js';
+import { WEAPONS, getWeapon, implementedWeapons } from '../packages/core/src/weapons.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -532,6 +533,32 @@ await check('三条平行刀线切成 4 块且面积正确', () => {
 await check('刀线在碎片外部时不增加块数', () => {
   const polys = splitPolygonMany(SQUARE, [{ a: { x: 0, y: -50 }, dx: 1, dy: 0 }], 0);
   assert.equal(polys.length, 1);
+});
+
+console.log('\n[10] 武器框架');
+
+await check('注册表包含全部 11 种武器且 id 不重复', () => {
+  assert.equal(WEAPONS.length, 11);
+  assert.equal(new Set(WEAPONS.map((w) => w.id)).size, 11);
+});
+
+await check('每种武器字段完整、输入方式合法', () => {
+  const inputs = ['drag', 'click', 'hold', 'drop'];
+  for (const weapon of WEAPONS) {
+    assert.ok(weapon.id && weapon.name && weapon.group && weapon.desc, weapon.id || '?');
+    assert.ok(inputs.includes(weapon.input), `${weapon.id} input=${weapon.input}`);
+    assert.equal(typeof weapon.implemented, 'boolean', `${weapon.id} implemented`);
+  }
+});
+
+await check('框架阶段只有「刀」可用', () => {
+  assert.deepEqual(
+    implementedWeapons().map((w) => w.id),
+    ['blade']
+  );
+  assert.equal(getWeapon('blackhole').id, 'blackhole');
+  assert.equal(getWeapon('nope'), null);
+  assert.equal(DEFAULT_CONFIG.weapon, 'blade');
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);
