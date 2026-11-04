@@ -110,5 +110,42 @@ export function createSound(getConfig) {
     src.stop(t + 0.3);
   }
 
-  return { slice, burst, unlock: ready };
+  // 手枪：短促枪声（下滑方波 + 高频噪声）
+  function shot() {
+    if (!enabled()) return;
+    const ctx = ready();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const vol = volume();
+
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(920, t);
+    osc.frequency.exponentialRampToValueAtTime(170, t + 0.08);
+    og.gain.setValueAtTime(0.2 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    osc.connect(og).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.13);
+
+    if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
+    const src = ctx.createBufferSource();
+    src.buffer = cachedNoise;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.16 * vol, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+
+    src.connect(hp).connect(ng).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + 0.12);
+  }
+
+  return { slice, burst, shot, unlock: ready };
 }

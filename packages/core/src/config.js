@@ -57,6 +57,9 @@ export const DEFAULT_CONFIG = {
   crackLength: 1,
   crackStartWidth: 1.1,
   crackEndWidth: 0.25,
+  // 手枪：弹孔半径与两发之间的最小间隔
+  pistolHoleRadius: 26,
+  pistolCooldown: 110,
 };
 
 export const BASE_SELECTORS = [

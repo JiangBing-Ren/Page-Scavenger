@@ -180,7 +180,7 @@ export function createCleaner(options) {
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.55, alpha: 0.65 });
 
     for (const target of targets) {
-      blastDestroy(target, cx, cy);
+      holeDestroy(target, cx, cy, CONFIG.cannonRadius * CONFIG.blastHoleScale);
     }
 
     if (!targets.length) {
@@ -191,6 +191,48 @@ export function createCleaner(options) {
         { x: 1, y: 0 }
       );
     }
+  }
+
+  // 手枪：单发点射，只打光标下的一个目标，留下小洞
+  function shootAt(x, y) {
+    const t = now();
+    if (t - state.lastFireAt < CONFIG.pistolCooldown) return;
+    state.lastFireAt = t;
+
+    let hit = null;
+    try {
+      const stack = document.elementsFromPoint(x, y) || [];
+      for (const node of stack) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node === state.canvas || node === document.documentElement || node === document.body) {
+          continue;
+        }
+        if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+        hit = node;
+        break;
+      }
+    } catch (e) {}
+
+    sound.shot();
+    state.shake = 0.55;
+    state.shockwaves.push({ x, y, r: 8, alpha: 0.75 });
+
+    const target = hit
+      ? findSlashTarget(hit, { config: CONFIG, marks: state.marks, canvas: state.canvas })
+      : null;
+
+    if (!target) {
+      // 打空：只留一点火花
+      spawnSparks(
+        state.particles,
+        { left: x - 6, top: y - 6, width: 12, height: 12 },
+        { x, y },
+        { x: 1, y: 0 }
+      );
+      return;
+    }
+
+    holeDestroy(target, x, y, CONFIG.pistolHoleRadius);
   }
 
   const saveMarks = () => {
@@ -273,8 +315,8 @@ export function createCleaner(options) {
     state.pending.delete(el);
   }
 
-  // 炮的摧毁：不做切线切分，直接把目标炸成网格碎块向外飞散
-  function blastDestroy(el, cx, cy) {
+  // 炮/枪的摧毁：不做切线切分，直接在目标上挖洞
+  function holeDestroy(el, cx, cy, holeRadius) {
     if (!el || state.pending.has(el) || state.slashed.has(el)) return;
 
     state.pending.add(el);
@@ -297,10 +339,7 @@ export function createCleaner(options) {
       if (state.undoStack.length > 20) state.undoStack.shift();
 
       spawnBlastHole(el, rect, cx, cy, {
-        holeRadius: Math.min(
-          CONFIG.cannonRadius * CONFIG.blastHoleScale,
-          Math.max(rect.width, rect.height) * 0.75
-        ),
+        holeRadius: Math.min(holeRadius, Math.max(rect.width, rect.height) * 0.75),
         hitStop: CONFIG.hitStop,
         holdMs: CONFIG.blastHoleHold,
         crackWidth: CONFIG.crackWidth,
@@ -586,6 +625,7 @@ export function createCleaner(options) {
     if (weapon && weapon.implemented && weapon.input === 'click') {
       e.preventDefault();
       if (weapon.id === 'cannon') blastAt(e.clientX, e.clientY);
+      else if (weapon.id === 'pistol') shootAt(e.clientX, e.clientY);
       return;
     }
 

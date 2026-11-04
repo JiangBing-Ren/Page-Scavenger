@@ -49,7 +49,7 @@
 | `spear` | 枪 | 近战 | drag | 占位 |
 | `sword` | 剑 | 近战 | drag | 占位 |
 | `cannon` | 炮 | 重火力 | click | 已实现 |
-| `pistol` | 手枪 | 枪械 | click | 占位 |
+| `pistol` | 手枪 | 枪械 | click | 已实现 |
 | `machinegun` | 机枪 | 枪械 | hold | 占位 |
 | `laser` | 激光炮 | 重火力 | hold | 占位 |
 | `grenade` | 手雷 | 投掷物 | drop | 占位 |
@@ -70,6 +70,8 @@
 **炮（cannon）** 是第一个 click 类实现：以点击点为圆心，用 `blastSamplePoints`（圆心 + 8 个环点）采样收集半径内的目标，逐个摧毁，并触发冲击波与音效。摧毁表现由 `spawnBlastHole` 实现——用 **SVG 遮罩挖出锯齿状不规则裂口**，再加 7 条**真正切开的渐宽裂缝**（不是画线：靠 nonzero 填充的绕向差异把区域挖空，能透出页面底层），并从裂口四周甩出 8 块三角碎片；命中瞬间强滤镜（提亮 3.4×、对比 1.7×、去饱和）快速回落，主体停留片刻后塌落消失。半径、开火间隔、裂口大小与停留时长都在配置器里调（`cannonRadius` / `weaponCooldown` / `blastHoleScale` / `blastHoleHold`）。注意它是范围武器，**范围内的禁区也会被一起炸掉并扣分**。
 
 高级参数按「武器 / 多刀 / 判定 / 刀光」分组，顶部带分类筛选，挑武器参数不用从头翻。
+
+**手枪（pistol）** 是第二个 click 类：只打中光标下的**一个**目标，留下小弹孔（`pistolHoleRadius`），打空时只留火花。
 
 ## 使用
 

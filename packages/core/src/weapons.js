@@ -48,8 +48,8 @@ export const WEAPONS = Object.freeze([
     name: '手枪',
     group: 'gun',
     input: 'click',
-    implemented: false,
-    desc: '单发射击，命中链上的第一个目标。',
+    implemented: true,
+    desc: '单发点射，只打中光标下的一个目标，留下小洞。',
   },
   {
     id: 'machinegun',
