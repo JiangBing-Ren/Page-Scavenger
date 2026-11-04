@@ -47,9 +47,9 @@ export const WEAPONS = Object.freeze([
     id: 'pistol',
     name: '手枪',
     group: 'gun',
-    input: 'click',
+    input: 'hold',
     implemented: true,
-    desc: '单发点射，只打中光标下的一个目标，留下小洞。',
+    desc: '按下处是枪口，按住期间朝光标方向持续射击，松开停止。',
   },
   {
     id: 'machinegun',

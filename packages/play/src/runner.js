@@ -287,3 +287,7 @@ window.__levelDebug = () => ({
 });
 // 自检用：切换武器。生产逻辑不会调用
 window.__levelSetWeapon = (id) => cleaner.setWeapon(id);
+window.__levelWeaponInput = () => {
+  const weapon = cleaner.getWeapon ? cleaner.getWeapon() : null;
+  return weapon ? weapon.input : '';
+};

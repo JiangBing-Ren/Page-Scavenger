@@ -332,20 +332,50 @@ function createWindow() {
 
             if (point !== 'none') {
               const pt = JSON.parse(point);
-              await wc.executeJavaScript(
-                '(() => {' +
-                  ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
-                  ' const opts = { bubbles: true, cancelable: true, clientX: ' +
-                  pt.x +
-                  ', clientY: ' +
-                  pt.y +
-                  ', button: 0, pointerType: "mouse" };' +
-                  ' canvas.dispatchEvent(new PointerEvent("pointerdown", { ...opts, buttons: 1 }));' +
-                  ' canvas.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));' +
-                  ' return "clicked";' +
-                  '})()'
+              const inputMode = await wc.executeJavaScript(
+                'window.__levelWeaponInput ? window.__levelWeaponInput() : ""'
               );
-              await sleep(500);
+
+              if (inputMode === 'hold') {
+                // 按住类：枪口放在目标左侧，指针移到目标中心后持续射击
+                const mx = Math.max(12, pt.x - 200);
+                await wc.executeJavaScript(
+                  '(() => {' +
+                    ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+                    ' const fire = (type, x, yy, buttons) => canvas.dispatchEvent(new PointerEvent(type, {' +
+                    '   bubbles: true, cancelable: true, clientX: x, clientY: yy, button: 0, buttons, pointerType: "mouse" }));' +
+                    ` fire("pointerdown", ${mx}, ${pt.y}, 1);` +
+                    ` fire("pointermove", ${pt.x}, ${pt.y}, 1);` +
+                    ' return "holding";' +
+                    '})()'
+                );
+                await sleep(700);
+                await wc.executeJavaScript(
+                  '(() => {' +
+                    ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+                    ' canvas.dispatchEvent(new PointerEvent("pointerup", {' +
+                    `   bubbles: true, cancelable: true, clientX: ${pt.x}, clientY: ${pt.y}, button: 0, buttons: 0, pointerType: "mouse" }));` +
+                    ' return "released";' +
+                    '})()'
+                );
+                await sleep(400);
+              } else {
+                await wc.executeJavaScript(
+                  '(() => {' +
+                    ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+                    ' const opts = { bubbles: true, cancelable: true, clientX: ' +
+                    pt.x +
+                    ', clientY: ' +
+                    pt.y +
+                    ', button: 0, pointerType: "mouse" };' +
+                    ' canvas.dispatchEvent(new PointerEvent("pointerdown", { ...opts, buttons: 1 }));' +
+                    ' canvas.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));' +
+                    ' return "clicked";' +
+                    '})()'
+                );
+                await sleep(500);
+              }
+
               console.log('[selftest] after-weapon ' + (await snap()));
             }
           }

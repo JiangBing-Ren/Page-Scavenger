@@ -17,6 +17,8 @@ import {
   drawTrail,
   updateParticles,
   drawCloseButton,
+  drawTracers,
+  drawFiringGuide,
 } from './render.js';
 
 const now = () => performance.now();
@@ -64,6 +66,8 @@ export function createCleaner(options) {
     marks: [],
     slashCount: 0,
     lastFireAt: 0,
+    firing: { active: false, muzzle: null, aim: null, lastShotAt: 0 },
+    tracers: [],
   };
 
   let saveTimer = null;
@@ -193,46 +197,79 @@ export function createCleaner(options) {
     }
   }
 
-  // 手枪：单发点射，只打光标下的一个目标，留下小洞
-  function shootAt(x, y) {
-    const t = now();
-    if (t - state.lastFireAt < CONFIG.pistolCooldown) return;
-    state.lastFireAt = t;
+  // 手枪：枪口固定在按下点，按住期间朝光标方向按间隔持续射击
+  function fireStep() {
+    const f = state.firing;
+    if (!f.active || !f.muzzle || !f.aim) return;
 
-    let hit = null;
-    try {
-      const stack = document.elementsFromPoint(x, y) || [];
+    const t = now();
+    if (t - f.lastShotAt < CONFIG.pistolCooldown) return;
+    f.lastShotAt = t;
+
+    fireBullet(f.muzzle, f.aim);
+  }
+
+  // 一颗子弹：沿枪口→光标做射线检测，命中最近的目标
+  function fireBullet(muzzle, aim) {
+    let dx = aim.x - muzzle.x;
+    let dy = aim.y - muzzle.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 4) return;
+
+    const steps = Math.max(2, Math.ceil(dist / CONFIG.sampleStep));
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+
+    let hitTarget = null;
+    let hitPoint = null;
+
+    for (let i = 1; i <= steps && !hitTarget; i++) {
+      const t = i / steps;
+      const x = muzzle.x + dx * t;
+      const y = muzzle.y + dy * t;
+
+      let stack;
+      try {
+        stack = document.elementsFromPoint(x, y);
+      } catch (e) {
+        continue;
+      }
+      if (!stack) continue;
+
       for (const node of stack) {
         if (!node || node.nodeType !== 1) continue;
         if (node === state.canvas || node === document.documentElement || node === document.body) {
           continue;
         }
         if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
-        hit = node;
+
+        const target = findSlashTarget(node, env);
+        if (target && !state.slashed.has(target) && !state.pending.has(target)) {
+          hitTarget = target;
+          hitPoint = { x, y };
+        }
         break;
       }
-    } catch (e) {}
-
-    sound.shot();
-    state.shake = 0.55;
-    state.shockwaves.push({ x, y, r: 8, alpha: 0.75 });
-
-    const target = hit
-      ? findSlashTarget(hit, { config: CONFIG, marks: state.marks, canvas: state.canvas })
-      : null;
-
-    if (!target) {
-      // 打空：只留一点火花
-      spawnSparks(
-        state.particles,
-        { left: x - 6, top: y - 6, width: 12, height: 12 },
-        { x, y },
-        { x: 1, y: 0 }
-      );
-      return;
     }
 
-    holeDestroy(target, x, y, CONFIG.pistolHoleRadius);
+    const end = hitPoint || aim;
+
+    // 弹道
+    if (state.tracers.length > 40) state.tracers.shift();
+    state.tracers.push({ x1: muzzle.x, y1: muzzle.y, x2: end.x, y2: end.y, alpha: 1 });
+
+    sound.shot();
+    state.shake = Math.max(state.shake, 0.22);
+
+    if (hitTarget) {
+      holeDestroy(hitTarget, end.x, end.y, CONFIG.pistolHoleRadius);
+    } else {
+      spawnSparks(
+        state.particles,
+        { left: end.x - 6, top: end.y - 6, width: 12, height: 12 },
+        end,
+        { x: dx, y: dy }
+      );
+    }
   }
 
   const saveMarks = () => {
@@ -621,11 +658,20 @@ export function createCleaner(options) {
 
     const weapon = currentWeapon();
 
+    // 按住类武器：以按下点为枪口，按住期间持续射击
+    if (weapon && weapon.implemented && weapon.input === 'hold') {
+      e.preventDefault();
+      state.firing.active = true;
+      state.firing.muzzle = { x: e.clientX, y: e.clientY };
+      state.firing.aim = { x: e.clientX, y: e.clientY };
+      state.firing.lastShotAt = 0;
+      return;
+    }
+
     // 点击类武器：按下即开火，不进入拖动流程
     if (weapon && weapon.implemented && weapon.input === 'click') {
       e.preventDefault();
       if (weapon.id === 'cannon') blastAt(e.clientX, e.clientY);
-      else if (weapon.id === 'pistol') shootAt(e.clientX, e.clientY);
       return;
     }
 
@@ -647,6 +693,11 @@ export function createCleaner(options) {
   }
 
   function onPointerMove(e) {
+    // 射击时瞄准点跟随光标，不受 isDrawing 限制
+    if (state.firing.active) {
+      state.firing.aim = { x: e.clientX, y: e.clientY };
+    }
+
     if (!state.active || !state.isDrawing) return;
 
     const pt = { x: e.clientX, y: e.clientY, t: now() };
@@ -672,6 +723,8 @@ export function createCleaner(options) {
 
   function onPointerUp() {
     if (!state.active) return;
+
+    state.firing.active = false;
 
     state.isDrawing = false;
     state.prevPoint = null;
@@ -728,10 +781,14 @@ export function createCleaner(options) {
       ctx.translate((Math.random() - 0.5) * 12 * shake, (Math.random() - 0.5) * 12 * shake);
     }
 
+    fireStep();
+
     drawTargetBoxes(ctx, state);
     drawEffects(ctx, state);
     drawTrail(ctx, state, CONFIG);
     updateParticles(ctx, state);
+    drawFiringGuide(ctx, state);
+    drawTracers(ctx, state);
     drawCloseButton(ctx, state);
 
     if (shaking) ctx.restore();
@@ -879,6 +936,9 @@ export function createCleaner(options) {
     stopObserver();
     releaseAllLifts();
     state.cutSequence = null;
+    state.firing.active = false;
+    state.firing.muzzle = null;
+    state.tracers = [];
     destroyCanvas();
 
     onStateChange(false);

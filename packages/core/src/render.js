@@ -331,6 +331,56 @@ export function updateParticles(ctx, state) {
   }
 }
 
+// 弹道：从枪口到命中点的细线，快速淡出
+export function drawTracers(ctx, state) {
+  if (!state.tracers || !state.tracers.length) return;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+
+  for (let i = state.tracers.length - 1; i >= 0; i--) {
+    const t = state.tracers[i];
+    t.alpha -= 0.16;
+    if (t.alpha <= 0) {
+      state.tracers.splice(i, 1);
+      continue;
+    }
+
+    ctx.strokeStyle = `rgba(255, 236, 170, ${t.alpha * 0.85})`;
+    ctx.lineWidth = 1 + 1.6 * t.alpha;
+    ctx.beginPath();
+    ctx.moveTo(t.x1, t.y1);
+    ctx.lineTo(t.x2, t.y2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// 射击引导：枪口标记 + 朝向光标的虚线
+export function drawFiringGuide(ctx, state) {
+  const f = state.firing;
+  if (!f || !f.active || !f.muzzle) return;
+
+  const aim = f.aim || f.muzzle;
+
+  ctx.save();
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = 'rgba(255, 200, 120, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(f.muzzle.x, f.muzzle.y);
+  ctx.lineTo(aim.x, aim.y);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255, 214, 140, 0.9)';
+  ctx.beginPath();
+  ctx.arc(f.muzzle.x, f.muzzle.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 export function drawCloseButton(ctx, state) {
   const size = 36;
   const pad = 16;
