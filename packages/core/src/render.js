@@ -162,34 +162,52 @@ export function drawEffects(ctx, state) {
     ctx.restore();
   }
 
-  // 逐刀落线的高亮
-  if (state.cutFlashes && state.cutFlashes.length) {
-    for (let i = state.cutFlashes.length - 1; i >= 0; i--) {
-      const f = state.cutFlashes[i];
-      f.alpha -= 0.09;
-      if (f.alpha <= 0) {
-        state.cutFlashes.splice(i, 1);
-        continue;
-      }
+  // 逐刀落线：已落下的刀变亮，未落的保持暗线。全程静态，不闪烁。
+  if (state.cutSequence && state.cutSequence.cuts) {
+    const { cuts, index } = state.cutSequence;
 
-      const dx = f.bx - f.ax;
-      const dy = f.by - f.ay;
+    ctx.save();
+    ctx.setLineDash([]);
+    ctx.lineCap = 'round';
+
+    for (let i = 0; i < cuts.length; i++) {
+      const c = cuts[i];
+      const dx = c.hitPoint.x - c.entry.x;
+      const dy = c.hitPoint.y - c.entry.y;
       const len = Math.hypot(dx, dy) || 1;
-      const ex = (dx / len) * 40;
-      const ey = (dy / len) * 40;
+      const ex = (dx / len) * 30;
+      const ey = (dy / len) * 30;
 
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = `rgba(255, 255, 255, ${f.alpha})`;
-      ctx.lineWidth = 1.2 + 2 * f.alpha;
-      ctx.shadowColor = 'rgba(0, 255, 204, 1)';
-      ctx.shadowBlur = 18 * f.alpha;
-      ctx.beginPath();
-      ctx.moveTo(f.ax - ex, f.ay - ey);
-      ctx.lineTo(f.bx + ex, f.by + ey);
-      ctx.stroke();
-      ctx.restore();
+      const x1 = c.entry.x - ex;
+      const y1 = c.entry.y - ey;
+      const x2 = c.hitPoint.x + ex;
+      const y2 = c.hitPoint.y + ey;
+
+      if (i < index) {
+        ctx.strokeStyle = 'rgba(0, 255, 204, 0.5)';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(150, 205, 225, 0.26)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
     }
+
+    ctx.restore();
   }
 
   if (state.shockwaves && state.shockwaves.length) {

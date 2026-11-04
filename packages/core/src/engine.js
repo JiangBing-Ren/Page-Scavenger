@@ -38,7 +38,7 @@ export function createCleaner(options) {
     shockwaves: [],
     flashWhite: 0,
     shake: 0,
-    cutFlashes: [],
+    cutSequence: null,
     batchRemaining: 0,
     canvas: null,
     ctx: null,
@@ -233,6 +233,7 @@ export function createCleaner(options) {
       () => {
         const rect = el.getBoundingClientRect();
         const mapped = mapCuts(cuts, rec.rect, rect);
+        state.cutSequence = { cuts: mapped, index: 0 };
         runCutStep(el, rect, mapped, 0, () => explode(el, rect, mapped));
       },
       willLift ? 160 : 0
@@ -256,21 +257,14 @@ export function createCleaner(options) {
     }));
   }
 
-  // 逐刀落线：每条线闪一下、响一声，间隔由慢到快
+  // 逐刀落线：只推进亮线进度并出声，不做闪烁（频闪会让人不适）
   function runCutStep(el, rect, cuts, index, done) {
     if (index >= cuts.length) {
       done();
       return;
     }
 
-    const cut = cuts[index];
-    state.cutFlashes.push({
-      ax: cut.entry.x,
-      ay: cut.entry.y,
-      bx: cut.hitPoint.x,
-      by: cut.hitPoint.y,
-      alpha: 1,
-    });
+    if (state.cutSequence) state.cutSequence.index = index + 1;
     sound.slice(index + 1);
 
     const gap = Math.max(
@@ -281,6 +275,8 @@ export function createCleaner(options) {
   }
 
   function explode(el, rect, cuts) {
+    state.cutSequence = null;
+
     // 播放序列时已经占位了 pending，这里只判断是否已被处理过
     if (!el || state.slashed.has(el)) {
       state.pending.delete(el);
@@ -692,6 +688,7 @@ export function createCleaner(options) {
     state.active = false;
     stopObserver();
     releaseAllLifts();
+    state.cutSequence = null;
     destroyCanvas();
 
     onStateChange(false);
