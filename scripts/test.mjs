@@ -298,7 +298,7 @@ const BUNDLES = [
   'dist/extension/content.js',
   'dist/extension/background.js',
   'dist/extension/popup/popup.js',
-  'dist/extension/levels/tutorial.js',
+  'dist/extension/play/levels/tutorial.js',
   'dist/extension-firefox/content.js',
   'dist/extension-firefox/background.js',
 ];
@@ -357,6 +357,20 @@ await check('桌面版打包产物语法正确', async () => {
     'dist/desktop/shell/shell.js',
     'dist/desktop/shell/guide.js',
     'dist/desktop/config/config.js',
+  ];
+  for (const rel of files) {
+    const code = await fs.readFile(path.join(ROOT, rel), 'utf8');
+    new vm.Script(code, { filename: rel });
+  }
+});
+
+await check('关卡与配置器产物语法正确（不执行）', async () => {
+  const files = [
+    'dist/extension/play/levels/runner.js',
+    'dist/extension/play/levels/tutorial.js',
+    'dist/extension/config/config.js',
+    'dist/extension-firefox/play/levels/runner.js',
+    'dist/extension-firefox/config/config.js',
   ];
   for (const rel of files) {
     const code = await fs.readFile(path.join(ROOT, rel), 'utf8');

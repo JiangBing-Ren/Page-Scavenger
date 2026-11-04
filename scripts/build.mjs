@@ -163,6 +163,10 @@ async function main() {
   const { generateIcons } = await import('./make-icons.mjs');
   await generateIcons();
 
+  // 先清空 dist：残留的旧产物会掩盖「引用了不存在的文件」这类问题，
+  // 表现为本地能过、CI 干净环境却失败（已经踩过一次）
+  await fs.rm(path.join(ROOT, 'dist'), { recursive: true, force: true });
+
   const results = [];
 
   for (const host of HOSTS) {
