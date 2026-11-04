@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('desktop', {
   ui: {
     setToolbarHeight: (height) => ipcRenderer.send('ui:toolbar-height', height),
     openGuide: () => ipcRenderer.send('ui:open-guide'),
+    openConfig: () => ipcRenderer.send('ui:open-config'),
     openExternal: (url) => ipcRenderer.send('ui:open-external', url),
   },
   guide: {
@@ -22,6 +23,10 @@ contextBridge.exposeInMainWorld('desktop', {
     copyPath: () => ipcRenderer.invoke('guide:copy-path'),
     openFolder: () => ipcRenderer.invoke('guide:open-folder'),
     openExtensionsPage: (browser) => ipcRenderer.invoke('guide:open-extensions', browser),
+  },
+  config: {
+    get: () => ipcRenderer.invoke('config:get'),
+    set: (config) => ipcRenderer.invoke('config:set', config),
   },
   on: {
     nav: (cb) => ipcRenderer.on('ui:nav', (_event, patch) => cb(patch)),

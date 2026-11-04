@@ -56,6 +56,7 @@ $('reload').addEventListener('click', () => api.nav.reload());
 $('home').addEventListener('click', () => api.nav.home());
 $('levels').addEventListener('click', () => api.nav.levels());
 $('guide').addEventListener('click', () => api.ui.openGuide());
+$('config').addEventListener('click', () => api.ui.openConfig());
 toggleBtn.addEventListener('click', () => api.game.toggle());
 
 // 设置

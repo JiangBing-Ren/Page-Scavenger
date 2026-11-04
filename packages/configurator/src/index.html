@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>页面清道夫 · 配置</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>页面清道夫 · 配置</h1>
+      <p class="sub">改动只在点「保存」后生效。<span id="host"></span></p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>常用</h2>
+        <div id="basic" class="grid"></div>
+      </section>
+
+      <details class="card" id="advanced">
+        <summary>高级参数（手感调校）</summary>
+        <div id="adv" class="grid"></div>
+      </details>
+
+      <section class="card">
+        <h2>预览</h2>
+        <p class="hint">
+          点「开始试切」后，用<b>当前未保存的参数</b>直接切下面的卡片和这块面板本身。Esc 或右上角 × 退出。
+        </p>
+        <div class="demo" id="demo">
+          <article class="demo-card"><div class="thumb a"></div><h3>演示卡片 A</h3></article>
+          <article class="demo-card"><div class="thumb b"></div><h3>演示卡片 B</h3></article>
+          <article class="demo-card"><div class="thumb c"></div><h3>演示卡片 C</h3></article>
+          <article class="demo-card"><div class="thumb d"></div><h3>演示卡片 D</h3></article>
+        </div>
+        <button id="preview" type="button">开始试切</button>
+      </section>
+    </main>
+
+    <footer>
+      <button id="save" class="primary" type="button">保存</button>
+      <button id="reset" type="button">还原默认</button>
+      <button id="export" type="button">导出 JSON</button>
+      <span id="toast"></span>
+    </footer>
+
+    <script src="config.js"></script>
+  </body>
+</html>

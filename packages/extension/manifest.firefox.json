@@ -28,8 +28,12 @@
   "background": {
     "scripts": ["background.js"]
   },
-  "permissions": ["storage", "contextMenus"],
+  "permissions": ["storage", "contextMenus", "tabs"],
   "host_permissions": ["<all_urls>"],
+  "options_ui": {
+    "page": "config/index.html",
+    "open_in_tab": true
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

@@ -144,6 +144,11 @@ async function init() {
     }
   });
 
+  $('config').addEventListener('click', () => {
+    if (ext.runtime.openOptionsPage) ext.runtime.openOptionsPage();
+    window.close();
+  });
+
   $('tutorial').addEventListener('click', () => {
     ext.tabs.create({ url: ext.runtime.getURL('play/levels/index.html') });
     window.close();

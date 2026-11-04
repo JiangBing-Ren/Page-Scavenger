@@ -53,6 +53,7 @@ function saveSettings() {
 let win = null;
 let view = null;
 let guideWin = null;
+let configWin = null;
 let toolbarHeight = 96;
 let lastGameState = { active: false, config: {} };
 
@@ -318,6 +319,34 @@ function createWindow() {
   }
 }
 
+function openConfig() {
+  if (configWin && !configWin.isDestroyed()) {
+    configWin.focus();
+    return;
+  }
+
+  configWin = new BrowserWindow({
+    width: 940,
+    height: 820,
+    minWidth: 720,
+    minHeight: 560,
+    backgroundColor: '#0d1016',
+    title: '页面清道夫 · 配置',
+    parent: win || undefined,
+    webPreferences: {
+      preload: path.join(assetsDir(), 'shell', 'shell-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  configWin.loadFile(path.join(assetsDir(), 'config', 'index.html'));
+  configWin.on('closed', () => {
+    configWin = null;
+  });
+}
+
 function openGuide() {
   if (guideWin && !guideWin.isDestroyed()) {
     guideWin.focus();
@@ -505,6 +534,18 @@ ipcMain.on('adslash:state', (_e, state) => {
 
 ipcMain.on('ui:open-guide', () => openGuide());
 
+ipcMain.on('ui:open-config', () => openConfig());
+
+ipcMain.handle('config:get', () => settings.config || {});
+
+ipcMain.handle('config:set', (_e, config) => {
+  if (!config || typeof config !== 'object') return false;
+  settings.config = { ...config };
+  saveSettings();
+  pushConfig();
+  return true;
+});
+
 ipcMain.on('ui:open-external', (_e, url) => {
   const target = String(url || '');
   if (/^https?:/i.test(target)) shell.openExternal(target);
@@ -557,6 +598,28 @@ app.whenReady().then(() => {
 
   loadSettings();
   createWindow();
+
+  // 开发自检：只打开配置器，检查表单渲染
+  if (process.env.ADSLASH_OPEN_CONFIG === '1') {
+    openConfig();
+    setTimeout(async () => {
+      try {
+        const report = await configWin.webContents.executeJavaScript(
+          'JSON.stringify({' +
+            ' fields: document.querySelectorAll(".field").length,' +
+            ' toggles: document.querySelectorAll(".field[data-kind=toggle]").length,' +
+            ' ranges: document.querySelectorAll(".field[data-kind=range]").length,' +
+            ' host: (document.getElementById("host") || {}).textContent || "",' +
+            ' save: !!document.getElementById("save")' +
+            '})'
+        );
+        console.log('[config-test] ' + report);
+      } catch (e) {
+        console.log('[config-test] error=' + e.message);
+      }
+      app.quit();
+    }, 1500);
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
