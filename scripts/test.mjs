@@ -551,10 +551,10 @@ await check('每种武器字段完整、输入方式合法', () => {
   }
 });
 
-await check('框架阶段只有「刀」「炮」「手枪」可用', () => {
+await check('框架阶段已实现：刀、炮、左轮、机枪', () => {
   assert.deepEqual(
     implementedWeapons().map((w) => w.id),
-    ['blade', 'cannon', 'pistol']
+    ['blade', 'cannon', 'revolver', 'machinegun']
   );  assert.equal(getWeapon('blackhole').id, 'blackhole');
   assert.equal(getWeapon('nope'), null);
   assert.equal(DEFAULT_CONFIG.weapon, 'blade');

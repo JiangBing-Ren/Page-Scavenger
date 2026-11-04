@@ -49,8 +49,8 @@
 | `spear` | 枪 | 近战 | drag | 占位 |
 | `sword` | 剑 | 近战 | drag | 占位 |
 | `cannon` | 炮 | 重火力 | click | 已实现 |
-| `pistol` | 手枪 | 枪械 | hold | 已实现 |
-| `machinegun` | 机枪 | 枪械 | hold | 占位 |
+| `revolver` | 左轮 | 枪械 | click | 已实现 |
+| `machinegun` | 机枪 | 枪械 | hold | 已实现 |
 | `laser` | 激光炮 | 重火力 | hold | 占位 |
 | `grenade` | 手雷 | 投掷物 | drop | 占位 |
 | `shell` | 榴弹 | 投掷物 | drop | 占位 |
@@ -71,7 +71,9 @@
 
 高级参数按「武器 / 多刀 / 判定 / 刀光」分组，顶部带分类筛选，挑武器参数不用从头翻。
 
-**手枪（pistol）** 是第一个 hold 类：按下的位置固定为枪口，按住期间朝光标方向按 `pistolCooldown` 间隔持续射击，松开停止。每发子弹沿枪口→光标做射线检测，命中路径上第一个未被摧毁的目标，留下小弹孔（`pistolHoleRadius`）；打空只留火花。射击时画面上会显示枪口标记、瞄准虚线和短暂弹道。
+**左轮（revolver）** 是 click 类：点一次打一枪，命中光标下的单个目标，弹孔大（`revolverHoleRadius`）、后坐明显、间隔长（`revolverCooldown`）。
+
+**机枪（machinegun）** 是 hold 类：按下点固定为枪口，按住期间朝光标持续扫射（`machinegunCooldown`），弹孔小（`machinegunHoleRadius`）并带随机散布（`machinegunSpread`）。射击时显示枪口标记、瞄准虚线与短暂弹道。
 
 ## 使用
 

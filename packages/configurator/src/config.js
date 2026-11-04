@@ -44,9 +44,11 @@ const ADV_FIELDS = [
   { key: 'crackLength', label: '裂缝 · 长短', type: 'range', min: 0.3, max: 2.5, step: 0.1, group: 'weapon' },
   { key: 'crackStartWidth', label: '裂缝 · 起点宽度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'weapon' },
   { key: 'crackEndWidth', label: '裂缝 · 末端宽度', type: 'range', min: 0.05, max: 1, step: 0.05, group: 'weapon' },
-  { key: 'pistolHoleRadius', label: '手枪 · 弹孔大小', type: 'range', min: 8, max: 80, step: 2, suffix: 'px', group: 'weapon' },
-  { key: 'pistolCooldown', label: '手枪 · 射速间隔', type: 'range', min: 60, max: 500, step: 10, suffix: 'ms', group: 'weapon' },
-
+  { key: 'revolverHoleRadius', label: '左轮 · 弹孔大小', type: 'range', min: 10, max: 90, step: 2, suffix: 'px', group: 'weapon' },
+  { key: 'revolverCooldown', label: '左轮 · 射击间隔', type: 'range', min: 120, max: 600, step: 10, suffix: 'ms', group: 'weapon' },
+  { key: 'machinegunHoleRadius', label: '机枪 · 弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'weapon' },
+  { key: 'machinegunCooldown', label: '机枪 · 射速间隔', type: 'range', min: 30, max: 300, step: 10, suffix: 'ms', group: 'weapon' },
+  { key: 'machinegunSpread', label: '机枪 · 散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'weapon' },
   // 多刀蓄力
   { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
   { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },

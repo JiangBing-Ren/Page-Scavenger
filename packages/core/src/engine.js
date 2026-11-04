@@ -197,20 +197,39 @@ export function createCleaner(options) {
     }
   }
 
-  // 手枪：枪口固定在按下点，按住期间朝光标方向按间隔持续射击
+  // 机枪：枪口固定在按下点，按住期间朝光标方向按间隔持续扫射
   function fireStep() {
     const f = state.firing;
     if (!f.active || !f.muzzle || !f.aim) return;
 
+    const weapon = currentWeapon();
+    if (!weapon || weapon.input !== 'hold') return;
+
+    const cooldown =
+      weapon.id === 'machinegun' ? CONFIG.machinegunCooldown : CONFIG.revolverCooldown;
+    const holeRadius =
+      weapon.id === 'machinegun' ? CONFIG.machinegunHoleRadius : CONFIG.revolverHoleRadius;
+    const spread = weapon.id === 'machinegun' ? CONFIG.machinegunSpread : 0;
+
     const t = now();
-    if (t - f.lastShotAt < CONFIG.pistolCooldown) return;
+    if (t - f.lastShotAt < cooldown) return;
     f.lastShotAt = t;
 
-    fireBullet(f.muzzle, f.aim);
+    fireBullet(f.muzzle, f.aim, { holeRadius, spread });
   }
 
   // 一颗子弹：沿枪口→光标做射线检测，命中最近的目标
-  function fireBullet(muzzle, aim) {
+  function fireBullet(muzzle, rawAim, options) {
+    const opts = options || {};
+    const spread = Number.isFinite(opts.spread) ? opts.spread : 0;
+    const aim =
+      spread > 0
+        ? {
+            x: rawAim.x + (Math.random() - 0.5) * 2 * spread,
+            y: rawAim.y + (Math.random() - 0.5) * 2 * spread,
+          }
+        : rawAim;
+
     let dx = aim.x - muzzle.x;
     let dy = aim.y - muzzle.y;
     const dist = Math.hypot(dx, dy);
@@ -261,7 +280,10 @@ export function createCleaner(options) {
     state.shake = Math.max(state.shake, 0.22);
 
     if (hitTarget) {
-      holeDestroy(hitTarget, end.x, end.y, CONFIG.pistolHoleRadius);
+      const radius = Number.isFinite(opts.holeRadius)
+        ? opts.holeRadius
+        : CONFIG.machinegunHoleRadius;
+      holeDestroy(hitTarget, end.x, end.y, radius);
     } else {
       spawnSparks(
         state.particles,
@@ -270,6 +292,47 @@ export function createCleaner(options) {
         { x: dx, y: dy }
       );
     }
+  }
+
+  // 左轮：点一次打一枪，命中光标下的单个目标，弹孔更大、后坐更明显
+  function singleShotAt(x, y) {
+    const t = now();
+    if (t - state.lastFireAt < CONFIG.revolverCooldown) return;
+    state.lastFireAt = t;
+
+    let hit = null;
+    try {
+      const stack = document.elementsFromPoint(x, y) || [];
+      for (const node of stack) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node === state.canvas || node === document.documentElement || node === document.body) {
+          continue;
+        }
+        if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+        hit = node;
+        break;
+      }
+    } catch (e) {}
+
+    sound.shot();
+    state.shake = 0.6;
+    state.shockwaves.push({ x, y, r: 10, alpha: 0.8 });
+
+    const target = hit
+      ? findSlashTarget(hit, { config: CONFIG, marks: state.marks, canvas: state.canvas })
+      : null;
+
+    if (!target) {
+      spawnSparks(
+        state.particles,
+        { left: x - 6, top: y - 6, width: 12, height: 12 },
+        { x, y },
+        { x: 1, y: 0 }
+      );
+      return;
+    }
+
+    holeDestroy(target, x, y, CONFIG.revolverHoleRadius);
   }
 
   const saveMarks = () => {
@@ -672,6 +735,7 @@ export function createCleaner(options) {
     if (weapon && weapon.implemented && weapon.input === 'click') {
       e.preventDefault();
       if (weapon.id === 'cannon') blastAt(e.clientX, e.clientY);
+      else if (weapon.id === 'revolver') singleShotAt(e.clientX, e.clientY);
       return;
     }
 
