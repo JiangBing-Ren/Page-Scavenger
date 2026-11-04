@@ -81,6 +81,47 @@ details.card[open] summary {
   margin-bottom: 12px;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.chip {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #111722;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.chip:hover {
+  border-color: #0aa47f;
+  color: var(--accent);
+}
+
+.chip.active {
+  border-color: var(--accent);
+  background: #0f2a24;
+  color: var(--accent);
+}
+
+.group-title {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+
+.group-title:first-child {
+  margin-top: 0;
+}
+
 .weapon-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

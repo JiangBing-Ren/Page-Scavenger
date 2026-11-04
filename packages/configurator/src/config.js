@@ -26,22 +26,42 @@ const BASIC_FIELDS = [
   { key: 'autoApplyMarks', label: '刷新后自动清理', type: 'toggle', hint: '记住切过的元素并自动隐藏' },
 ];
 
+// 高级参数按类别分组，顶部可按类别筛选，避免找武器参数时翻半天
+const ADV_GROUPS = [
+  ['weapon', '武器'],
+  ['multicut', '多刀'],
+  ['target', '判定'],
+  ['trail', '刀光'],
+];
+
 const ADV_FIELDS = [
-  { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1 },
-  { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms' },
-  { key: 'sampleStep', label: '采样步长', type: 'range', min: 1, max: 12, step: 1, suffix: 'px' },
-  { key: 'maxAncestorDepth', label: '向上搜索深度', type: 'range', min: 3, max: 30, step: 1 },
-  { key: 'maxTargetRatio', label: '目标尺寸上限', type: 'range', min: 0.3, max: 1, step: 0.05 },
-  { key: 'pierceRatio', label: '贯穿判定比例', type: 'range', min: 0.2, max: 1, step: 0.05 },
-  { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1 },
-  { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px' },
-  { key: 'cutStepBase', label: '逐刀起始间隔', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms' },
-  { key: 'cutStepDecay', label: '逐刀递减系数', type: 'range', min: 0.4, max: 1, step: 0.02 },
-  { key: 'cutStepMin', label: '逐刀最小间隔', type: 'range', min: 10, max: 150, step: 5, suffix: 'ms' },
+  // 武器
+  { key: 'cannonRadius', label: '炮 · 爆破半径', type: 'range', min: 60, max: 320, step: 10, suffix: 'px', group: 'weapon' },
+  { key: 'weaponCooldown', label: '炮 · 开火间隔', type: 'range', min: 60, max: 600, step: 10, suffix: 'ms', group: 'weapon' },
+  { key: 'blastHoleScale', label: '炮 · 洞口大小', type: 'range', min: 0.4, max: 1.2, step: 0.05, group: 'weapon' },
+  { key: 'blastHoleHold', label: '炮 · 洞口停留', type: 'range', min: 0, max: 1500, step: 50, suffix: 'ms', group: 'weapon' },
+
+  // 多刀蓄力
+  { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
+  { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },
+  { key: 'cutStepBase', label: '逐刀起始间隔', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'multicut' },
+  { key: 'cutStepDecay', label: '逐刀递减系数', type: 'range', min: 0.4, max: 1, step: 0.02, group: 'multicut' },
+  { key: 'cutStepMin', label: '逐刀最小间隔', type: 'range', min: 10, max: 150, step: 5, suffix: 'ms', group: 'multicut' },
+
+  // 目标判定
+  { key: 'maxAncestorDepth', label: '向上搜索深度', type: 'range', min: 3, max: 30, step: 1, group: 'target' },
+  { key: 'maxTargetRatio', label: '目标尺寸上限', type: 'range', min: 0.3, max: 1, step: 0.05, group: 'target' },
+  { key: 'pierceRatio', label: '贯穿判定比例', type: 'range', min: 0.2, max: 1, step: 0.05, group: 'target' },
+  { key: 'sampleStep', label: '采样步长', type: 'range', min: 1, max: 12, step: 1, suffix: 'px', group: 'target' },
+
+  // 刀光
+  { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'trail' },
+  { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'trail' },
 ];
 
 let draft = { ...DEFAULT_CONFIG };
 let saved = { ...DEFAULT_CONFIG };
+let advFilter = 'all';
 let cleaner = null;
 let previewing = false;
 
@@ -230,34 +250,58 @@ function renderWeapons() {
   }
 }
 
-function renderAll() {
-  for (const [containerId, fields] of [
-    ['basic', BASIC_FIELDS],
-    ['adv', ADV_FIELDS],
-  ]) {
-    const container = $(containerId);
-    container.innerHTML = '';
-    for (const field of fields) container.appendChild(fieldRow(field));
+function renderAdvanced() {
+  const container = $('adv');
+  const chips = $('adv-filter');
+  if (!container || !chips) return;
+
+  container.innerHTML = '';
+  chips.innerHTML = '';
+
+  const defs = [['all', '全部'], ...ADV_GROUPS];
+  for (const [key, label] of defs) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip' + (advFilter === key ? ' active' : '');
+    chip.textContent = label;
+    chip.addEventListener('click', () => {
+      advFilter = key;
+      renderAdvanced();
+    });
+    chips.appendChild(chip);
   }
+
+  const groups = advFilter === 'all' ? ADV_GROUPS : ADV_GROUPS.filter(([key]) => key === advFilter);
+
+  for (const [key, label] of groups) {
+    const fields = ADV_FIELDS.filter((field) => field.group === key);
+    if (!fields.length) continue;
+
+    const title = document.createElement('h3');
+    title.className = 'group-title';
+    title.textContent = label;
+    container.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    for (const field of fields) grid.appendChild(fieldRow(field));
+    container.appendChild(grid);
+  }
+}
+
+function renderAll() {
+  const basic = $('basic');
+  basic.innerHTML = '';
+  for (const field of BASIC_FIELDS) basic.appendChild(fieldRow(field));
+
+  renderAdvanced();
   renderWeapons();
   markDirty();
 }
 
+// 重置 / 导入后整体重绘：筛选状态与分组都会重建，避免残留旧值
 function syncControls() {
-  for (const row of document.querySelectorAll('.field')) {
-    const key = row.dataset.key;
-    if (!key) continue;
-    if (row.dataset.kind === 'toggle') row.querySelector('input').checked = !!draft[key];
-    if (row.dataset.kind === 'select') row.querySelector('select').value = String(draft[key]);
-    if (row.dataset.kind === 'range') {
-      const input = row.querySelector('input');
-      input.value = draft[key];
-      input.dispatchEvent(new Event('input'));
-      input.disabled = false;
-    }
-  }
-  renderWeapons();
-  markDirty();
+  renderAll();
 }
 
 function updatePreviewButton() {

@@ -299,8 +299,12 @@ export function createCleaner(options) {
         rect,
         cx,
         cy,
-        Math.min(CONFIG.cannonRadius * 0.85, Math.max(rect.width, rect.height) * 0.75),
-        CONFIG.hitStop
+        Math.min(
+          CONFIG.cannonRadius * CONFIG.blastHoleScale,
+          Math.max(rect.width, rect.height) * 0.75
+        ),
+        CONFIG.hitStop,
+        CONFIG.blastHoleHold
       );
       spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
 

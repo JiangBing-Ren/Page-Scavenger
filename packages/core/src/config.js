@@ -49,6 +49,9 @@ export const DEFAULT_CONFIG = {
   // 炮：爆破半径与两次开火的最小间隔
   cannonRadius: 140,
   weaponCooldown: 150,
+  // 炮：洞口半径系数（相对 cannonRadius）与主体停留时长（ms）
+  blastHoleScale: 0.85,
+  blastHoleHold: 620,
 };
 
 export const BASE_SELECTORS = [

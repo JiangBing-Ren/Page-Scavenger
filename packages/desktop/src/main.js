@@ -654,6 +654,8 @@ app.whenReady().then(() => {
             '   dialog: !!document.getElementById("import-dialog"),' +
             '   weapons: document.querySelectorAll("#weapons .weapon").length,' +
             '   activeWeapon: !!document.querySelector("#weapons .weapon.active"),' +
+            '   chips: document.querySelectorAll("#adv-filter .chip").length,' +
+            '   groups: document.querySelectorAll("#adv .group-title").length,' +
             '   host: (document.getElementById("host") || {}).textContent || "",' +
             ' };' +
             ' const dlg = document.getElementById("import-dialog");' +
@@ -665,6 +667,9 @@ app.whenReady().then(() => {
             ' form.importedHitStop = sel ? sel.value : "missing";' +
             ' form.importedComboCut = chk ? chk.checked : "missing";' +
             ' form.dialogClosed = !dlg.open;' +
+            ' const weaponChip = Array.from(document.querySelectorAll("#adv-filter .chip")).find((c) => c.textContent === "武器");' +
+            ' if (weaponChip) weaponChip.click();' +
+            ' form.filteredFields = document.querySelectorAll("#adv .field").length;' +
             ' return form;' +
             '})())'
         );

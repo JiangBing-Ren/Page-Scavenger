@@ -67,7 +67,9 @@
 
 引擎 API：`getWeapons()` / `getWeapon()` / `setWeapon(id)`。`setWeapon` 只接受已实现的武器并返回 `{ ok, reason }`；存储里若残留未实现的 id，会回退到刀，不会让斩击失灵。
 
-**炮（cannon）** 是第一个 click 类实现：以点击点为圆心，用 `blastSamplePoints`（圆心 + 8 个环点）采样收集半径内的目标，逐个摧毁，并触发冲击波与音效。摧毁表现由 `spawnBlastHole` 实现——用径向渐变遮罩在目标上**炸出一个圆洞**，洞边碎屑外飞，主体停留约 0.6 秒后塌落消失，与刀的一刀两半完全不同。半径与开火间隔在配置器里调（`cannonRadius` / `weaponCooldown`）。注意它是范围武器，**范围内的禁区也会被一起炸掉并扣分**。
+**炮（cannon）** 是第一个 click 类实现：以点击点为圆心，用 `blastSamplePoints`（圆心 + 8 个环点）采样收集半径内的目标，逐个摧毁，并触发冲击波与音效。摧毁表现由 `spawnBlastHole` 实现——用径向渐变遮罩在目标上**炸出一个圆洞**，洞边碎屑外飞，主体停留片刻后塌落消失，与刀的一刀两半完全不同。半径、开火间隔、洞口大小与停留时长都在配置器里调（`cannonRadius` / `weaponCooldown` / `blastHoleScale` / `blastHoleHold`）。注意它是范围武器，**范围内的禁区也会被一起炸掉并扣分**。
+
+高级参数按「武器 / 多刀 / 判定 / 刀光」分组，顶部带分类筛选，挑武器参数不用从头翻。
 
 ## 使用
 

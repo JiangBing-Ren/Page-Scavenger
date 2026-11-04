@@ -203,7 +203,7 @@ function animate(node, options) {
 }
 
 // 爆破：在目标上炸出一个洞（圆形遮罩），洞边碎屑外飞，主体保留后塌落
-export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop) {
+export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, holdMs) {
   const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
 
   let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -239,6 +239,7 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop) 
   }, 60);
 
   // 主体再停留一会儿让人看清洞，然后塌落消失
+  const hold = Number.isFinite(holdMs) ? Math.max(0, holdMs) : 620;
   setTimeout(() => {
     node.style.transition = 'transform 0.85s ease-in, opacity 0.85s ease-in';
     node.style.transform = 'translate3d(0, 150px, 0) scale(0.97)';
@@ -246,7 +247,7 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop) 
     setTimeout(() => {
       if (node.parentNode) node.parentNode.removeChild(node);
     }, 950);
-  }, hitStop + 620);
+  }, hitStop + hold);
 
   return true;
 }
