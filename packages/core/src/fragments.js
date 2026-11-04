@@ -1,5 +1,5 @@
 import { MEDIA_SELECTOR } from './config.js';
-import { getSplitPolygons, polygonArea } from './geometry.js';
+import { getSplitPolygons, polygonArea, ensureWinding } from './geometry.js';
 import {
   registerPiece,
   unregisterPiece,
@@ -228,6 +228,12 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
   const ly = Math.min(Math.max(centerY - box.top, 0), box.height);
   const r = Math.max(8, Number(holeRadius) || 60);
 
+  // 多边形绕向必须与外框相反，nonzero 填充下才能真正挖空
+  const oriented = (points) => ensureWinding(points, true);
+
+  const toSubpath = (points) =>
+    'M' + points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') + ' Z';
+
   // 1) 不规则洞口：半径带随机抖动，避免看起来像规整的圆
   const segments = 16;
   const holePoints = [];
@@ -240,60 +246,61 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
     });
   }
 
-  // 外矩形 + 洞口，用 evenodd 让洞真正透明
+  // 2) 裂缝：真正切开的渐宽缝隙（不是画黑线），从裂口向外收窄
+  const cracks = [];
+  const crackCount = 7;
+  for (let i = 0; i < crackCount; i++) {
+    const base = (i / crackCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.55;
+    const bend = (Math.random() - 0.5) * 0.5;
+    const startR = r * (0.72 + Math.random() * 0.16);
+    const total = r * (0.95 + Math.random() * 1.5);
+
+    const start = { x: lx + Math.cos(base) * startR, y: ly + Math.sin(base) * startR };
+    const midAngle = base + bend * 0.5;
+    const mid = {
+      x: lx + Math.cos(midAngle) * (startR + total * 0.5),
+      y: ly + Math.sin(midAngle) * (startR + total * 0.5),
+    };
+    const endAngle = base + bend;
+    const end = {
+      x: lx + Math.cos(endAngle) * (startR + total),
+      y: ly + Math.sin(endAngle) * (startR + total),
+    };
+
+    const wide = Math.max(4, r * 0.19);
+    const thin = Math.max(1.4, wide * 0.18);
+
+    const n0 = { x: -Math.sin(base), y: Math.cos(base) };
+    const n1 = { x: -Math.sin(midAngle), y: Math.cos(midAngle) };
+    const n2 = { x: -Math.sin(endAngle), y: Math.cos(endAngle) };
+
+    cracks.push(
+      oriented([
+        { x: start.x + n0.x * wide * 0.5, y: start.y + n0.y * wide * 0.5 },
+        { x: mid.x + n1.x * wide * 0.34, y: mid.y + n1.y * wide * 0.34 },
+        { x: end.x + n2.x * thin * 0.5, y: end.y + n2.y * thin * 0.5 },
+        { x: end.x - n2.x * thin * 0.5, y: end.y - n2.y * thin * 0.5 },
+        { x: mid.x - n1.x * wide * 0.34, y: mid.y - n1.y * wide * 0.34 },
+        { x: start.x - n0.x * wide * 0.5, y: start.y - n0.y * wide * 0.5 },
+      ])
+    );
+  }
+
   const pathData =
     `M0 0 H${box.width.toFixed(1)} V${box.height.toFixed(1)} H0 Z ` +
-    'M' +
-    holePoints.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') +
-    ' Z';
+    toSubpath(oriented(holePoints)) +
+    ' ' +
+    cracks.map(toSubpath).join(' ');
 
   const maskSvg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
-    `<path d="${pathData}" fill="#fff" fill-rule="evenodd"/></svg>`;
+    `<path d="${pathData}" fill="#fff"/></svg>`;
 
   const maskUrl = `url("data:image/svg+xml,${encodeURIComponent(maskSvg)}")`;
   node.style.webkitMaskImage = maskUrl;
   node.style.maskImage = maskUrl;
   node.style.maskRepeat = 'no-repeat';
   node.style.maskSize = '100% 100%';
-
-  // 2) 放射状裂纹：从洞口向外走的折线
-  const cracks = [];
-  const crackCount = 7;
-  for (let i = 0; i < crackCount; i++) {
-    const angle = (i / crackCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
-    const startR = r * (0.9 + Math.random() * 0.2);
-    const length = r * (0.7 + Math.random() * 1.3);
-    const points = [];
-    let x = lx + Math.cos(angle) * startR;
-    let y = ly + Math.sin(angle) * startR;
-    points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-
-    for (let step = 1; step <= 3; step++) {
-      const wobble = angle + (Math.random() - 0.5) * 0.45;
-      x = lx + Math.cos(wobble) * (startR + (length * step) / 3);
-      y = ly + Math.sin(wobble) * (startR + (length * step) / 3);
-      points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-    }
-
-    cracks.push(
-      `<polyline points="${points.join(' ')}" fill="none" stroke="rgba(8,12,16,0.82)" ` +
-        `stroke-width="${Math.max(1.2, r * 0.035).toFixed(1)}" stroke-linecap="round"/>`
-    );
-  }
-
-  const crackSvg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
-    cracks.join('') +
-    '</svg>';
-
-  const crackLayer = document.createElement('div');
-  crackLayer.setAttribute('data-adslash-ui', '1');
-  crackLayer.style.cssText =
-    'position:absolute;inset:0;pointer-events:none;' +
-    `background-repeat:no-repeat;background-size:100% 100%;` +
-    `background-image:url("data:image/svg+xml,${encodeURIComponent(crackSvg)}");`;
-  node.appendChild(crackLayer);
 
   // 3) 洞口四周的碎块：三角形，从弹着点向外飞
   const shardCount = 8;

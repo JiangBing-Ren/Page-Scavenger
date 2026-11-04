@@ -6,7 +6,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
-import { getSplitPolygons, polygonArea } from '../packages/core/src/geometry.js';
+import { getSplitPolygons, polygonArea, signedArea, ensureWinding } from '../packages/core/src/geometry.js';
 import { visibleBox } from '../packages/core/src/fragments.js';
 import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS } from '../packages/core/src/config.js';
 import {
@@ -555,8 +555,7 @@ await check('框架阶段只有「刀」与「炮」可用', () => {
   assert.deepEqual(
     implementedWeapons().map((w) => w.id),
     ['blade', 'cannon']
-  );
-  assert.equal(getWeapon('blackhole').id, 'blackhole');
+  );  assert.equal(getWeapon('blackhole').id, 'blackhole');
   assert.equal(getWeapon('nope'), null);
   assert.equal(DEFAULT_CONFIG.weapon, 'blade');
 });
@@ -572,6 +571,31 @@ await check('爆破采样点：圆心 + 一圈环点', () => {
   for (const p of points.slice(1)) {
     assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y));
   }
+});
+
+await check('遮罩挖空依赖绕向：洞必须与外框反向', () => {
+  const rect = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
+  ];
+  const rectSign = Math.sign(signedArea(rect));
+  assert.notEqual(rectSign, 0);
+
+  const hole = [
+    { x: 10, y: 10 },
+    { x: 30, y: 10 },
+    { x: 30, y: 30 },
+    { x: 10, y: 30 },
+  ];
+
+  const a = ensureWinding(hole, true);
+  assert.ok(signedArea(a) < 0, '应为负号面积');
+  assert.notEqual(Math.sign(signedArea(a)), rectSign, '必须与外框相反');
+
+  const b = ensureWinding(hole.slice().reverse(), true);
+  assert.ok(signedArea(b) < 0, '反向输入也要归一化到负号');
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

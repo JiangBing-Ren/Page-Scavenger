@@ -46,3 +46,22 @@ export function polygonArea(poly) {
   }
   return Math.abs(sum) / 2;
 }
+
+// 有符号面积：用于判断多边形绕向（SVG nonzero 填充依赖它）
+export function signedArea(poly) {
+  let sum = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p1 = poly[i];
+    const p2 = poly[(i + 1) % poly.length];
+    sum += p1.x * p2.y - p2.x * p1.y;
+  }
+  return sum / 2;
+}
+
+// 把多边形绕向调整到指定方向；wantNegative 为 true 表示需要负号面积
+export function ensureWinding(poly, wantNegative) {
+  const area = signedArea(poly);
+  if (area === 0) return poly;
+  const isNegative = area < 0;
+  return isNegative === wantNegative ? poly : poly.slice().reverse();
+}
