@@ -168,6 +168,17 @@ function fieldRow(field) {
     row.dataset.kind = 'range';
   }
 
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.className = 'reset-field';
+  resetBtn.title = '还原此项为默认值';
+  resetBtn.textContent = '↺';
+  resetBtn.addEventListener('click', () => {
+    draft[field.key] = DEFAULT_CONFIG[field.key];
+    syncControls();
+  });
+  control.appendChild(resetBtn);
+
   row.append(label, control);
   return row;
 }
@@ -259,7 +270,56 @@ async function init() {
     }
   });
 
+  $('import').addEventListener('click', () => {
+    $('import-text').value = '';
+    $('import-dialog').showModal();
+  });
+
+  $('import-cancel').addEventListener('click', () => $('import-dialog').close());
+
+  $('import-confirm').addEventListener('click', () => {
+    if (applyImport($('import-text').value)) $('import-dialog').close();
+  });
+
   $('preview').addEventListener('click', togglePreview);
+}
+
+// 只接受已知字段；类型不符的跳过，避免把界面写坏
+function applyImport(text) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    toast('JSON 解析失败', true);
+    return false;
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    toast('需要一个 JSON 对象', true);
+    return false;
+  }
+
+  let count = 0;
+  for (const key of Object.keys(DEFAULT_CONFIG)) {
+    if (!(key in parsed)) continue;
+    const expected = typeof DEFAULT_CONFIG[key];
+    const value = parsed[key];
+    const ok =
+      typeof value === expected && (expected !== 'number' || Number.isFinite(value));
+    if (!ok) continue;
+    draft[key] = value;
+    count++;
+  }
+
+  syncControls();
+
+  if (count === 0) {
+    toast('没有识别到可用字段', true);
+    return false;
+  }
+
+  toast(`已导入 ${count} 项，记得保存`);
+  return true;
 }
 
 init();

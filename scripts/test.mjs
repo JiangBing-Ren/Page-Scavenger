@@ -339,6 +339,21 @@ await check('packages/core 内不出现 chrome./browser. 调用', async () => {
   }
 });
 
+await check('桌面版源码语法正确（含未打包的 main.js）', async () => {
+  const files = [
+    'packages/desktop/src/main.js',
+    'packages/desktop/src/page-preload.js',
+    'packages/desktop/src/shell/shell.js',
+    'packages/desktop/src/shell/shell-preload.js',
+    'packages/desktop/src/shell/guide.js',
+  ];
+  for (const rel of files) {
+    const code = await fs.readFile(path.join(ROOT, rel), 'utf8');
+    // 只解析不执行：main.js 的语法错误会让整个 Electron 主进程起不来
+    new vm.Script(code, { filename: rel });
+  }
+});
+
 await check('打包产物里不残留 import/export 语句', async () => {
   for (const rel of BUNDLES.concat('dist/页面清道夫.user.js')) {
     const code = await fs.readFile(path.join(ROOT, rel), 'utf8');

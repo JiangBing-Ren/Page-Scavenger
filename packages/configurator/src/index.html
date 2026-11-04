@@ -41,8 +41,23 @@
       <button id="save" class="primary" type="button">保存</button>
       <button id="reset" type="button">还原默认</button>
       <button id="export" type="button">导出 JSON</button>
+      <button id="import" type="button">导入 JSON</button>
       <span id="toast"></span>
     </footer>
+
+    <dialog id="import-dialog">
+      <h2>导入配置</h2>
+      <p class="hint">粘贴之前导出的 JSON。只接受已知字段，未知字段会被忽略。</p>
+      <textarea
+        id="import-text"
+        spellcheck="false"
+        placeholder='{ "hitStop": 80, "comboCut": true }'
+      ></textarea>
+      <div class="dialog-row">
+        <button id="import-cancel" type="button">取消</button>
+        <button id="import-confirm" class="primary" type="button">导入</button>
+      </div>
+    </dialog>
 
     <script src="config.js"></script>
   </body>

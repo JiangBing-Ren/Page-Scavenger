@@ -605,13 +605,28 @@ app.whenReady().then(() => {
     setTimeout(async () => {
       try {
         const report = await configWin.webContents.executeJavaScript(
-          'JSON.stringify({' +
-            ' fields: document.querySelectorAll(".field").length,' +
-            ' toggles: document.querySelectorAll(".field[data-kind=toggle]").length,' +
-            ' ranges: document.querySelectorAll(".field[data-kind=range]").length,' +
-            ' host: (document.getElementById("host") || {}).textContent || "",' +
-            ' save: !!document.getElementById("save")' +
-            '})'
+          'JSON.stringify((() => {' +
+            ' const resetCount = document.querySelectorAll(".reset-field").length;' +
+            ' const form = {' +
+            '   fields: document.querySelectorAll(".field").length,' +
+            '   toggles: document.querySelectorAll(".field[data-kind=toggle]").length,' +
+            '   ranges: document.querySelectorAll(".field[data-kind=range]").length,' +
+            '   resets: resetCount,' +
+            '   importBtn: !!document.getElementById("import"),' +
+            '   dialog: !!document.getElementById("import-dialog"),' +
+            '   host: (document.getElementById("host") || {}).textContent || "",' +
+            ' };' +
+            ' const dlg = document.getElementById("import-dialog");' +
+            ' dlg.showModal();' +
+            ' document.getElementById("import-text").value = \'{"hitStop":80,"comboCut":false}\';' +
+            ' document.getElementById("import-confirm").click();' +
+            ' const sel = document.querySelector(\'[data-key=hitStop] select\');' +
+            ' const chk = document.querySelector(\'[data-key=comboCut] input\');' +
+            ' form.importedHitStop = sel ? sel.value : "missing";' +
+            ' form.importedComboCut = chk ? chk.checked : "missing";' +
+            ' form.dialogClosed = !dlg.open;' +
+            ' return form;' +
+            '})())'
         );
         console.log('[config-test] ' + report);
       } catch (e) {
