@@ -174,8 +174,10 @@ export function createCleaner(options) {
     );
 
     sound.burst();
-    state.shake = 1;
-    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.4, alpha: 1 });
+    // 炮击的冲击更重：震屏加强，双层冲击波
+    state.shake = 1.25;
+    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.25, alpha: 1 });
+    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.55, alpha: 0.65 });
 
     for (const target of targets) {
       blastDestroy(target, cx, cy);

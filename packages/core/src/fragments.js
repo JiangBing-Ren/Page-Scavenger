@@ -202,7 +202,7 @@ function animate(node, options) {
   else run();
 }
 
-// 爆破：在目标上炸出一个洞（圆形遮罩），洞边碎屑外飞，主体保留后塌落
+// 爆破：从弹着点不规则裂开 —— 锯齿状洞口 + 放射裂纹 + 四周飞散的碎块
 export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, holdMs) {
   const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
 
@@ -219,7 +219,8 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
     { x: 0, y: box.height },
   ];
 
-  const build = makeBuilder(el, rect, box, oversized, 'brightness(2.6) contrast(1.25)');
+  // 命中瞬间的强滤镜：提亮 + 提对比 + 轻微去饱和，制造冲击感
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(3.4) contrast(1.7) saturate(0.75)');
   const node = build(full);
 
   // 遮罩坐标以 node 自身的左上角为原点（超大元素时 node 是包装层，仍是同一原点）
@@ -227,18 +228,105 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
   const ly = Math.min(Math.max(centerY - box.top, 0), box.height);
   const r = Math.max(8, Number(holeRadius) || 60);
 
-  const mask = `radial-gradient(circle ${r}px at ${lx}px ${ly}px, transparent 98%, #000 100%)`;
-  node.style.webkitMaskImage = mask;
-  node.style.maskImage = mask;
+  // 1) 不规则洞口：半径带随机抖动，避免看起来像规整的圆
+  const segments = 16;
+  const holePoints = [];
+  for (let i = 0; i < segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const jitter = 0.68 + Math.random() * 0.62;
+    holePoints.push({
+      x: lx + Math.cos(angle) * r * jitter,
+      y: ly + Math.sin(angle) * r * jitter,
+    });
+  }
+
+  // 外矩形 + 洞口，用 evenodd 让洞真正透明
+  const pathData =
+    `M0 0 H${box.width.toFixed(1)} V${box.height.toFixed(1)} H0 Z ` +
+    'M' +
+    holePoints.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') +
+    ' Z';
+
+  const maskSvg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
+    `<path d="${pathData}" fill="#fff" fill-rule="evenodd"/></svg>`;
+
+  const maskUrl = `url("data:image/svg+xml,${encodeURIComponent(maskSvg)}")`;
+  node.style.webkitMaskImage = maskUrl;
+  node.style.maskImage = maskUrl;
   node.style.maskRepeat = 'no-repeat';
+  node.style.maskSize = '100% 100%';
+
+  // 2) 放射状裂纹：从洞口向外走的折线
+  const cracks = [];
+  const crackCount = 7;
+  for (let i = 0; i < crackCount; i++) {
+    const angle = (i / crackCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+    const startR = r * (0.9 + Math.random() * 0.2);
+    const length = r * (0.7 + Math.random() * 1.3);
+    const points = [];
+    let x = lx + Math.cos(angle) * startR;
+    let y = ly + Math.sin(angle) * startR;
+    points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+
+    for (let step = 1; step <= 3; step++) {
+      const wobble = angle + (Math.random() - 0.5) * 0.45;
+      x = lx + Math.cos(wobble) * (startR + (length * step) / 3);
+      y = ly + Math.sin(wobble) * (startR + (length * step) / 3);
+      points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+
+    cracks.push(
+      `<polyline points="${points.join(' ')}" fill="none" stroke="rgba(8,12,16,0.82)" ` +
+        `stroke-width="${Math.max(1.2, r * 0.035).toFixed(1)}" stroke-linecap="round"/>`
+    );
+  }
+
+  const crackSvg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
+    cracks.join('') +
+    '</svg>';
+
+  const crackLayer = document.createElement('div');
+  crackLayer.setAttribute('data-adslash-ui', '1');
+  crackLayer.style.cssText =
+    'position:absolute;inset:0;pointer-events:none;' +
+    `background-repeat:no-repeat;background-size:100% 100%;` +
+    `background-image:url("data:image/svg+xml,${encodeURIComponent(crackSvg)}");`;
+  node.appendChild(crackLayer);
+
+  // 3) 洞口四周的碎块：三角形，从弹着点向外飞
+  const shardCount = 8;
+  for (let i = 0; i < shardCount; i++) {
+    const angle = (i / shardCount) * Math.PI * 2 + Math.random() * 0.4;
+    const inner = r * (0.85 + Math.random() * 0.2);
+    const outer = r * (1.3 + Math.random() * 0.45);
+    const spread = 0.16 + Math.random() * 0.14;
+
+    const poly = [
+      { x: lx + Math.cos(angle) * inner, y: ly + Math.sin(angle) * inner },
+      { x: lx + Math.cos(angle - spread) * outer, y: ly + Math.sin(angle - spread) * outer },
+      { x: lx + Math.cos(angle + spread) * outer, y: ly + Math.sin(angle + spread) * outer },
+    ];
+
+    const shard = build(poly);
+    const power = 200 + Math.random() * 220;
+    animate(shard, {
+      tx: Math.cos(angle) * power,
+      ty: Math.sin(angle) * power + 220,
+      rot: (Math.random() - 0.5) * 300,
+      axis: Math.random() > 0.5 ? 1 : -1,
+      hitStop: hitStop + Math.random() * 50,
+    });
+  }
 
   // 命中瞬间亮一下，立刻恢复原色，避免整块常亮
-  node.style.transition = 'filter 0.22s ease-out';
+  node.style.transition = 'filter 0.18s ease-out';
   setTimeout(() => {
     node.style.filter = 'none';
   }, 60);
 
-  // 主体再停留一会儿让人看清洞，然后塌落消失
+  // 主体再停留一会儿让人看清裂口，然后塌落消失
   const hold = Number.isFinite(holdMs) ? Math.max(0, holdMs) : 620;
   setTimeout(() => {
     node.style.transition = 'transform 0.85s ease-in, opacity 0.85s ease-in';
