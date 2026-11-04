@@ -202,8 +202,8 @@ function animate(node, options) {
   else run();
 }
 
-// 爆破：把目标切成网格状碎块，从爆点向外飞散（区别于刀的一刀两半）
-export function spawnBlastFragments(el, rect, centerX, centerY, hitStop) {
+// 爆破：在目标上炸出一个洞（圆形遮罩），洞边碎屑外飞，主体保留后塌落
+export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop) {
   const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
 
   let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -212,52 +212,41 @@ export function spawnBlastFragments(el, rect, centerX, centerY, hitStop) {
   }
   if (box.width < 4 || box.height < 4) return false;
 
-  // 尺寸决定碎块密度，最多 4×4，避免一次爆炸生成过多节点
-  const cols = Math.max(2, Math.min(4, Math.round(box.width / 110)));
-  const rows = Math.max(2, Math.min(4, Math.round(box.height / 110)));
-  const cellW = box.width / cols;
-  const cellH = box.height / rows;
+  const full = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ];
 
-  const build = makeBuilder(el, rect, box, oversized, 'brightness(3) contrast(1.4)');
-  const originX = centerX - box.left;
-  const originY = centerY - box.top;
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(2.6) contrast(1.25)');
+  const node = build(full);
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const poly = [
-        { x: col * cellW, y: row * cellH },
-        { x: (col + 1) * cellW, y: row * cellH },
-        { x: (col + 1) * cellW, y: (row + 1) * cellH },
-        { x: col * cellW, y: (row + 1) * cellH },
-      ];
+  // 遮罩坐标以 node 自身的左上角为原点（超大元素时 node 是包装层，仍是同一原点）
+  const lx = Math.min(Math.max(centerX - box.left, 0), box.width);
+  const ly = Math.min(Math.max(centerY - box.top, 0), box.height);
+  const r = Math.max(8, Number(holeRadius) || 60);
 
-      const node = build(poly);
-      registerPiece(node, {
-        build,
-        box,
-        polygon: poly,
-        screenCache: null,
-        bornAt: performance.now(),
-      });
+  const mask = `radial-gradient(circle ${r}px at ${lx}px ${ly}px, transparent 98%, #000 100%)`;
+  node.style.webkitMaskImage = mask;
+  node.style.maskImage = mask;
+  node.style.maskRepeat = 'no-repeat';
 
-      // 从爆点指向碎块中心，决定飞散方向
-      let vx = cellW * (col + 0.5) - originX;
-      let vy = cellH * (row + 0.5) - originY;
-      const dist = Math.hypot(vx, vy) || 1;
-      vx /= dist;
-      vy /= dist;
+  // 命中瞬间亮一下，立刻恢复原色，避免整块常亮
+  node.style.transition = 'filter 0.22s ease-out';
+  setTimeout(() => {
+    node.style.filter = 'none';
+  }, 60);
 
-      const power = 170 + Math.random() * 190;
-
-      animate(node, {
-        tx: vx * power,
-        ty: vy * power + 260,
-        rot: (Math.random() - 0.5) * 280,
-        axis: Math.random() > 0.5 ? 1 : -1,
-        hitStop: hitStop + Math.random() * 70,
-      });
-    }
-  }
+  // 主体再停留一会儿让人看清洞，然后塌落消失
+  setTimeout(() => {
+    node.style.transition = 'transform 0.85s ease-in, opacity 0.85s ease-in';
+    node.style.transform = 'translate3d(0, 150px, 0) scale(0.97)';
+    node.style.opacity = '0';
+    setTimeout(() => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, 950);
+  }, hitStop + 620);
 
   return true;
 }

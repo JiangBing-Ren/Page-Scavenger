@@ -282,9 +282,10 @@ function createWindow() {
             wc.executeJavaScript(
               '(() => {' +
                 ' const frags = Array.from(document.querySelectorAll("[data-adslash-ui]")).filter((n) => n.style.clipPath);' +
+                ' const holes = frags.filter((n) => n.style.maskImage || n.style.webkitMaskImage).length;' +
                 ' const hud = document.getElementById("cleaner-hud");' +
                 ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
-                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length });' +
+                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes });' +
                 '})()'
             );
 

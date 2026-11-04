@@ -5,7 +5,7 @@ import {
   spawnSparks,
   spawnDOMFragments,
   spawnMultiCutFragments,
-  spawnBlastFragments,
+  spawnBlastHole,
   reslicePiece,
 } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
@@ -294,7 +294,14 @@ export function createCleaner(options) {
       state.undoStack.push({ sel, prevStyle });
       if (state.undoStack.length > 20) state.undoStack.shift();
 
-      spawnBlastFragments(el, rect, cx, cy, CONFIG.hitStop);
+      spawnBlastHole(
+        el,
+        rect,
+        cx,
+        cy,
+        Math.min(CONFIG.cannonRadius * 0.85, Math.max(rect.width, rect.height) * 0.75),
+        CONFIG.hitStop
+      );
       spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
 
       state.slashCount++;
