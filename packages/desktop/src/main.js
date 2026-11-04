@@ -309,6 +309,43 @@ function createWindow() {
 
           await sleep(300);
           console.log('[selftest] after-combo-cut ' + (await snap()));
+
+          // 可选：切换到点击类武器（如炮）再做一次范围攻击
+          const weaponId = process.env.ADSLASH_SELFTEST_WEAPON || '';
+          if (weaponId) {
+            const switched = await wc.executeJavaScript(
+              `JSON.stringify(window.__levelSetWeapon ? window.__levelSetWeapon(${JSON.stringify(weaponId)}) : null)`
+            );
+            console.log('[selftest] switch ' + switched);
+
+            const point = await wc.executeJavaScript(
+              '(() => {' +
+                ' const el = Array.from(document.querySelectorAll("[data-target]")).find((n) => !n.hasAttribute("data-scored"));' +
+                ' if (!el) return "none";' +
+                ' const r = el.getBoundingClientRect();' +
+                ' return JSON.stringify({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) });' +
+                '})()'
+            );
+
+            if (point !== 'none') {
+              const pt = JSON.parse(point);
+              await wc.executeJavaScript(
+                '(() => {' +
+                  ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +
+                  ' const opts = { bubbles: true, cancelable: true, clientX: ' +
+                  pt.x +
+                  ', clientY: ' +
+                  pt.y +
+                  ', button: 0, pointerType: "mouse" };' +
+                  ' canvas.dispatchEvent(new PointerEvent("pointerdown", { ...opts, buttons: 1 }));' +
+                  ' canvas.dispatchEvent(new PointerEvent("pointerup", { ...opts, buttons: 0 }));' +
+                  ' return "clicked";' +
+                  '})()'
+              );
+              await sleep(500);
+              console.log('[selftest] after-weapon ' + (await snap()));
+            }
+          }
         }
       } catch (e) {
         console.log('[selftest] error=' + e.message);

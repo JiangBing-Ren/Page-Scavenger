@@ -41,14 +41,14 @@
 
 ## 武器系统
 
-框架已就位，**目前只有「刀」实现**，其余为占位。定义在 `packages/core/src/weapons.js`。
+框架已就位，**目前「刀」与「炮」已实现**，其余为占位。定义在 `packages/core/src/weapons.js`。
 
 | id | 名称 | 类别 | 输入 | 状态 |
 | --- | --- | --- | --- | --- |
 | `blade` | 刀 | 近战 | drag | 已实现 |
 | `spear` | 枪 | 近战 | drag | 占位 |
 | `sword` | 剑 | 近战 | drag | 占位 |
-| `cannon` | 炮 | 重火力 | click | 占位 |
+| `cannon` | 炮 | 重火力 | click | 已实现 |
 | `pistol` | 手枪 | 枪械 | click | 占位 |
 | `machinegun` | 机枪 | 枪械 | hold | 占位 |
 | `laser` | 激光炮 | 重火力 | hold | 占位 |
@@ -66,6 +66,8 @@
 3. 实现命中与表现，可复用 `spawnDOMFragments` / `reslicePiece` / `spawnSparks`
 
 引擎 API：`getWeapons()` / `getWeapon()` / `setWeapon(id)`。`setWeapon` 只接受已实现的武器并返回 `{ ok, reason }`；存储里若残留未实现的 id，会回退到刀，不会让斩击失灵。
+
+**炮（cannon）** 是第一个 click 类实现：以点击点为圆心，用 `blastSamplePoints`（圆心 + 8 个环点）采样收集半径内的目标，逐个摧毁，并触发冲击波与音效。半径与开火间隔在配置器里调（`cannonRadius` / `weaponCooldown`）。注意它是范围武器，**范围内的禁区也会被一起切掉并扣分**。
 
 ## 使用
 

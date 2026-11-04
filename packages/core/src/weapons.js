@@ -40,7 +40,7 @@ export const WEAPONS = Object.freeze([
     name: '炮',
     group: 'heavy',
     input: 'click',
-    implemented: false,
+    implemented: true,
     desc: '点击处产生范围爆破，按半径摧毁目标。',
   },
   {
@@ -118,4 +118,22 @@ export function getWeapon(id) {
 
 export function implementedWeapons() {
   return WEAPONS.filter((weapon) => weapon.implemented);
+}
+
+// 爆破采样点：圆心 + 一圈环点。用于在点击处收集范围内的目标，
+// 避免遍历整棵 DOM。返回 [{ x, y }]。
+export function blastSamplePoints(cx, cy, radius, ringCount) {
+  const count = Math.max(4, Math.floor(Number(ringCount) || 8));
+  const r = Math.max(0, Number(radius) || 0);
+  const points = [{ x: cx, y: cy }];
+
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    points.push({
+      x: cx + Math.cos(angle) * r * 0.7,
+      y: cy + Math.sin(angle) * r * 0.7,
+    });
+  }
+
+  return points;
 }

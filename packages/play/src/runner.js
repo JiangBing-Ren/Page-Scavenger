@@ -285,3 +285,5 @@ window.__levelDebug = () => ({
   finished: state.finished,
   engine: cleaner.getDebugState ? cleaner.getDebugState() : null,
 });
+// 自检用：切换武器。生产逻辑不会调用
+window.__levelSetWeapon = (id) => cleaner.setWeapon(id);

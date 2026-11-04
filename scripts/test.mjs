@@ -19,7 +19,7 @@ import {
 } from '../packages/core/src/score.js';
 import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
 import { splitPolygon, splitPolygonMany } from '../packages/core/src/pieces.js';
-import { WEAPONS, getWeapon, implementedWeapons } from '../packages/core/src/weapons.js';
+import { WEAPONS, getWeapon, implementedWeapons, blastSamplePoints } from '../packages/core/src/weapons.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -551,14 +551,27 @@ await check('每种武器字段完整、输入方式合法', () => {
   }
 });
 
-await check('框架阶段只有「刀」可用', () => {
+await check('框架阶段只有「刀」与「炮」可用', () => {
   assert.deepEqual(
     implementedWeapons().map((w) => w.id),
-    ['blade']
+    ['blade', 'cannon']
   );
   assert.equal(getWeapon('blackhole').id, 'blackhole');
   assert.equal(getWeapon('nope'), null);
   assert.equal(DEFAULT_CONFIG.weapon, 'blade');
+});
+
+await check('爆破采样点：圆心 + 一圈环点', () => {
+  const points = blastSamplePoints(100, 100, 140);
+  assert.equal(points.length, 9);
+  assert.deepEqual(points[0], { x: 100, y: 100 });
+
+  const dist = Math.hypot(points[1].x - 100, points[1].y - 100);
+  assert.ok(Math.abs(dist - 140 * 0.7) < 0.001, '环点半径应为 0.7R');
+
+  for (const p of points.slice(1)) {
+    assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y));
+  }
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

@@ -4,7 +4,7 @@ import { findSlashTarget } from './targeting.js';
 import { spawnSparks, spawnDOMFragments, spawnMultiCutFragments, reslicePiece } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
-import { WEAPONS, getWeapon } from './weapons.js';
+import { WEAPONS, getWeapon, blastSamplePoints } from './weapons.js';
 import {
   drawEffects,
   drawTargetBoxes,
@@ -57,6 +57,7 @@ export function createCleaner(options) {
     listeners: [],
     marks: [],
     slashCount: 0,
+    lastFireAt: 0,
   };
 
   let saveTimer = null;
@@ -122,6 +123,68 @@ export function createCleaner(options) {
     if (!weapon.implemented) return { ok: false, reason: 'not-implemented' };
     CONFIG.weapon = weapon.id;
     return { ok: true, weapon: weapon.id };
+  }
+
+  // 炮：以点击点为圆心收集范围内目标，逐个摧毁。
+  // 其他 click 类武器（手枪等）实现时在这里加自己的分支。
+  function blastAt(cx, cy) {
+    const t = now();
+    if (t - state.lastFireAt < CONFIG.weaponCooldown) return;
+    state.lastFireAt = t;
+
+    const radius = CONFIG.cannonRadius;
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+    const found = [];
+    const seen = new Set();
+
+    for (const point of blastSamplePoints(cx, cy, radius)) {
+      let stack;
+      try {
+        stack = document.elementsFromPoint(point.x, point.y);
+      } catch (e) {
+        continue;
+      }
+      if (!stack) continue;
+
+      for (const node of stack) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node === state.canvas || node === document.documentElement || node === document.body) {
+          continue;
+        }
+        if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+
+        const target = findSlashTarget(node, env);
+        if (target && !seen.has(target)) {
+          seen.add(target);
+          found.push(target);
+        }
+        break;
+      }
+    }
+
+    // 容器和它内部的元素同时命中时只保留容器，避免重复计分
+    const targets = found.filter(
+      (target) => !found.some((other) => other !== target && other.contains(target))
+    );
+
+    sound.burst();
+    state.shake = 1;
+    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.4, alpha: 1 });
+
+    for (const target of targets) {
+      const rect = target.getBoundingClientRect();
+      slash(target, { x: cx, y: cy }, { x: 1, y: 0 }, { x: cx, y: cy }, []);
+      spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
+    }
+
+    if (!targets.length) {
+      spawnSparks(
+        state.particles,
+        { left: cx - 8, top: cy - 8, width: 16, height: 16 },
+        { x: cx, y: cy },
+        { x: 1, y: 0 }
+      );
+    }
   }
 
   const saveMarks = () => {
@@ -464,7 +527,16 @@ export function createCleaner(options) {
 
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-    // 未实现的武器不响应输入（框架阶段只有刀可用）
+    const weapon = currentWeapon();
+
+    // 点击类武器：按下即开火，不进入拖动流程
+    if (weapon && weapon.implemented && weapon.input === 'click') {
+      e.preventDefault();
+      if (weapon.id === 'cannon') blastAt(e.clientX, e.clientY);
+      return;
+    }
+
+    // 未实现的武器不响应输入
     if (!canSlash()) return;
 
     e.preventDefault();
