@@ -339,17 +339,27 @@ await check('packages/core 内不出现 chrome./browser. 调用', async () => {
   }
 });
 
-await check('桌面版源码语法正确（含未打包的 main.js）', async () => {
+await check('桌面版主进程与预加载脚本语法正确', async () => {
   const files = [
     'packages/desktop/src/main.js',
-    'packages/desktop/src/page-preload.js',
-    'packages/desktop/src/shell/shell.js',
     'packages/desktop/src/shell/shell-preload.js',
-    'packages/desktop/src/shell/guide.js',
   ];
   for (const rel of files) {
     const code = await fs.readFile(path.join(ROOT, rel), 'utf8');
     // 只解析不执行：main.js 的语法错误会让整个 Electron 主进程起不来
+    new vm.Script(code, { filename: rel });
+  }
+});
+
+await check('桌面版打包产物语法正确', async () => {
+  const files = [
+    'dist/desktop/page-preload.js',
+    'dist/desktop/shell/shell.js',
+    'dist/desktop/shell/guide.js',
+    'dist/desktop/config/config.js',
+  ];
+  for (const rel of files) {
+    const code = await fs.readFile(path.join(ROOT, rel), 'utf8');
     new vm.Script(code, { filename: rel });
   }
 });
