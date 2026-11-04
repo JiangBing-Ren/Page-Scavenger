@@ -52,6 +52,11 @@ export const DEFAULT_CONFIG = {
   // 炮：洞口半径系数（相对 cannonRadius）与主体停留时长（ms）
   blastHoleScale: 0.85,
   blastHoleHold: 620,
+  // 炮：裂缝形态，宽度与长度都以洞口半径为基准
+  crackWidth: 0.14,
+  crackLength: 1,
+  crackStartWidth: 1.1,
+  crackEndWidth: 0.25,
 };
 
 export const BASE_SELECTORS = [

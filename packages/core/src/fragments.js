@@ -203,7 +203,17 @@ function animate(node, options) {
 }
 
 // 爆破：从弹着点不规则裂开 —— 锯齿状洞口 + 放射裂纹 + 四周飞散的碎块
-export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, holdMs) {
+export function spawnBlastHole(el, rect, centerX, centerY, options) {
+  const opts = options || {};
+  const hitStop = Number.isFinite(opts.hitStop) ? opts.hitStop : 0;
+  const holdMs = opts.holdMs;
+
+  // 裂缝形态参数（以洞口半径为基准）
+  const crackWidth = Number.isFinite(opts.crackWidth) ? opts.crackWidth : 0.14;
+  const crackLength = Number.isFinite(opts.crackLength) ? opts.crackLength : 1;
+  const crackStartWidth = Number.isFinite(opts.crackStartWidth) ? opts.crackStartWidth : 1.1;
+  const crackEndWidth = Number.isFinite(opts.crackEndWidth) ? opts.crackEndWidth : 0.25;
+
   const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
 
   let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -226,7 +236,7 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
   // 遮罩坐标以 node 自身的左上角为原点（超大元素时 node 是包装层，仍是同一原点）
   const lx = Math.min(Math.max(centerX - box.left, 0), box.width);
   const ly = Math.min(Math.max(centerY - box.top, 0), box.height);
-  const r = Math.max(8, Number(holeRadius) || 60);
+  const r = Math.max(8, Number(opts.holeRadius) || 60);
 
   // 多边形绕向必须与外框相反，nonzero 填充下才能真正挖空
   const oriented = (points) => ensureWinding(points, true);
@@ -295,15 +305,19 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
       points.push({ x, y });
     }
 
+    // 起点/末端宽度由配置决定，中间的收窄曲线再叠加随机指数与起伏
+    const startW = Math.max(0.6, width * crackStartWidth);
+    const endW = Math.max(0.4, width * crackEndWidth);
+
     const widths = points.map((_, i) => {
       const t = i / (points.length - 1);
-      const base = Math.pow(1 - t, taper);
+      const curve = Math.pow(1 - t, taper);
       const noise = 1 + (Math.random() - 0.5) * 2 * wobble;
-      return Math.max(0.6, width * base * noise + 0.4);
+      return Math.max(0.5, (endW + (startW - endW) * curve) * noise);
     });
 
-    // 与裂口衔接处加粗，避免根部比中间还细
-    widths[0] = width * (1.1 + Math.random() * 0.5);
+    widths[0] = startW * (0.92 + Math.random() * 0.16);
+    widths[widths.length - 1] = endW;
 
     cracks.push(oriented(toRibbon(points, widths)));
 
@@ -334,10 +348,10 @@ export function spawnBlastHole(el, rect, centerX, centerY, holeRadius, hitStop, 
     };
 
     // 长短、粗细各自独立浮动，避免五条裂缝看起来一个样
-    const lengthMul = 0.5 + Math.random() * 1.9;
+    const lengthMul = crackLength * (0.5 + Math.random() * 1.9);
     const widthMul = 0.5 + Math.random() * 1.2;
 
-    grow(origin, angle, r * lengthMul, Math.max(3, r * 0.14) * widthMul, 1);
+    grow(origin, angle, r * lengthMul, Math.max(3, r * crackWidth) * widthMul, 1);
   }
 
   const pathData =

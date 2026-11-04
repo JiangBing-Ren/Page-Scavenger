@@ -296,18 +296,18 @@ export function createCleaner(options) {
       state.undoStack.push({ sel, prevStyle });
       if (state.undoStack.length > 20) state.undoStack.shift();
 
-      spawnBlastHole(
-        el,
-        rect,
-        cx,
-        cy,
-        Math.min(
+      spawnBlastHole(el, rect, cx, cy, {
+        holeRadius: Math.min(
           CONFIG.cannonRadius * CONFIG.blastHoleScale,
           Math.max(rect.width, rect.height) * 0.75
         ),
-        CONFIG.hitStop,
-        CONFIG.blastHoleHold
-      );
+        hitStop: CONFIG.hitStop,
+        holdMs: CONFIG.blastHoleHold,
+        crackWidth: CONFIG.crackWidth,
+        crackLength: CONFIG.crackLength,
+        crackStartWidth: CONFIG.crackStartWidth,
+        crackEndWidth: CONFIG.crackEndWidth,
+      });
       spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
 
       state.slashCount++;

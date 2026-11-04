@@ -573,6 +573,15 @@ await check('爆破采样点：圆心 + 一圈环点', () => {
   }
 });
 
+await check('裂缝形态参数有默认值且为正数', () => {
+  for (const key of ['crackWidth', 'crackLength', 'crackStartWidth', 'crackEndWidth']) {
+    const value = DEFAULT_CONFIG[key];
+    assert.equal(typeof value, 'number', `${key} 应为数字`);
+    assert.ok(value > 0, `${key} 应大于 0`);
+  }
+  assert.ok(DEFAULT_CONFIG.crackStartWidth > DEFAULT_CONFIG.crackEndWidth, '起点应比末端宽');
+});
+
 await check('遮罩挖空依赖绕向：洞必须与外框反向', () => {
   const rect = [
     { x: 0, y: 0 },
