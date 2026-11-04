@@ -302,12 +302,19 @@ export function updateParticles(ctx, state) {
     p.x += p.vx;
     p.y += p.vy;
 
-    p.vy += p.isChunk ? 1.2 : 0.8;
-
-    p.vx *= 0.96;
-    p.vy *= 0.98;
-    p.life -= p.decay;
-    if (!p.isChunk) p.size *= 0.96;
+    if (p.isSmoke) {
+      // 烟雾：缓慢上升、逐渐膨胀、无重力
+      p.vx *= 0.98;
+      p.vy *= 0.99;
+      p.life -= p.decay;
+      p.size += 0.45;
+    } else {
+      p.vy += p.isChunk ? 1.2 : 0.8;
+      p.vx *= 0.96;
+      p.vy *= 0.98;
+      p.life -= p.decay;
+      if (!p.isChunk) p.size *= 0.96;
+    }
 
     if (p.life <= 0) {
       state.particles.splice(i, 1);
@@ -315,10 +322,14 @@ export function updateParticles(ctx, state) {
     }
 
     ctx.save();
-    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.globalAlpha = Math.max(0, p.life) * (p.isSmoke ? 0.45 : 1);
     ctx.fillStyle = p.color;
 
-    if (p.isChunk) {
+    if (p.isSmoke) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.isChunk) {
       ctx.translate(p.x, p.y);
       ctx.rotate(p.x * 0.05);
       ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
@@ -378,6 +389,42 @@ export function drawFiringGuide(ctx, state) {
   ctx.beginPath();
   ctx.arc(f.muzzle.x, f.muzzle.y, 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+// 左轮弹仓：左下角显示剩余弹药，位于计分板上方
+export function drawChambers(ctx, state, config) {
+  if (!config || config.weapon !== 'revolver') return;
+
+  const total = Math.max(1, Math.floor(config.revolverChambers) || 6);
+  const size = 16;
+  const gap = 8;
+  const x0 = 22;
+  const y0 = Math.max(40, state.cssH - 96);
+
+  ctx.save();
+
+  for (let i = 0; i < total; i++) {
+    const cx = x0 + i * (size + gap) + size / 2;
+    ctx.beginPath();
+    ctx.arc(cx, y0, size / 2, 0, Math.PI * 2);
+
+    if (i < state.chambers) {
+      ctx.fillStyle = 'rgba(255, 214, 140, 0.9)';
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(255, 214, 140, 0.32)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  if (state.reloadingUntil > now()) {
+    ctx.fillStyle = 'rgba(255, 214, 140, 0.85)';
+    ctx.font = '12px system-ui, -apple-system, sans-serif';
+    ctx.fillText('换弹中…', x0, y0 + 26);
+  }
+
   ctx.restore();
 }
 

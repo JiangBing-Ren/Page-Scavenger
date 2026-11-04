@@ -1,4 +1,5 @@
 import { basePointsForArea, comboMultiplier, scoreForSlash } from './score.js';
+import { getWeapon } from './weapons.js';
 
 // 自由模式：任意网页都能计分。不判断元素"该不该切"，只按面积与连击给分。
 export const COMBO_WINDOW_MS = 900;
@@ -25,12 +26,13 @@ const STYLE = `
 `;
 
 export function createFreeScore() {
-  const state = { score: 0, combo: 0, bestCombo: 0, hits: 0, lastAt: null };
+  const state = { score: 0, combo: 0, bestCombo: 0, hits: 0, lastAt: null, unit: '刀' };
 
   let root = null;
   let scoreEl = null;
   let comboEl = null;
   let hitsEl = null;
+  let unitEl = null;
   let gainEl = null;
   let resetTimer = null;
 
@@ -50,13 +52,14 @@ export function createFreeScore() {
     root.innerHTML =
       '<span class="lbl">分数</span><b data-k="score">0</b>' +
       '<span class="sep">·</span><span class="lbl">连击</span><b class="combo" data-k="combo">×1.00</b>' +
-      '<span class="sep">·</span><b data-k="hits">0</b><span class="lbl">刀</span>' +
+      '<span class="sep">·</span><b data-k="hits">0</b><span class="lbl" data-k="unit">刀</span>' +
       '<i class="gain" data-k="gain"></i>';
     document.body.appendChild(root);
 
     scoreEl = root.querySelector('[data-k="score"]');
     comboEl = root.querySelector('[data-k="combo"]');
     hitsEl = root.querySelector('[data-k="hits"]');
+    unitEl = root.querySelector('[data-k="unit"]');
     gainEl = root.querySelector('[data-k="gain"]');
   }
 
@@ -65,6 +68,7 @@ export function createFreeScore() {
     scoreEl.textContent = String(state.score);
     comboEl.textContent = '×' + comboMultiplier(state.combo || 1).toFixed(2);
     hitsEl.textContent = String(state.hits);
+    unitEl.textContent = state.unit;
     root.classList.toggle('hot', state.combo >= 3);
   }
 
@@ -79,7 +83,12 @@ export function createFreeScore() {
     state.lastAt = now;
     if (state.combo > state.bestCombo) state.bestCombo = state.combo;
 
-    const points = basePointsForArea(rect.width * rect.height);
+    // 计分随武器变化：近战按面积，枪械按命中固定分
+    const weapon = info && info.weapon ? getWeapon(info.weapon) : null;
+    state.unit = weapon && weapon.unit ? weapon.unit : '刀';
+
+    const fixed = !!(weapon && weapon.scoring === 'hit' && Number.isFinite(weapon.hitPoints));
+    const points = fixed ? weapon.hitPoints : basePointsForArea(rect.width * rect.height);
     const gain = scoreForSlash([points], state.combo, 0).total;
     state.score += gain;
     state.hits++;
@@ -110,8 +119,7 @@ export function createFreeScore() {
       state.lastAt = null;
       ensureHud();
       if (root) root.classList.add('on');
-      render();
-    } else if (root) {
+      render();    } else if (root) {
       root.classList.remove('on');
       root.classList.remove('hot');
     }

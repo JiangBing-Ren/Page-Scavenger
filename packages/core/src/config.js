@@ -60,6 +60,9 @@ export const DEFAULT_CONFIG = {
   // 左轮：单发，弹孔大、射速慢
   revolverHoleRadius: 34,
   revolverCooldown: 250,
+  // 左轮弹仓：容量与换弹耗时
+  revolverChambers: 6,
+  revolverReloadMs: 900,
   // 机枪：连射，弹孔小、有散布
   machinegunHoleRadius: 18,
   machinegunCooldown: 90,

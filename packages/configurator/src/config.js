@@ -46,6 +46,8 @@ const ADV_FIELDS = [
   { key: 'crackEndWidth', label: '裂缝 · 末端宽度', type: 'range', min: 0.05, max: 1, step: 0.05, group: 'weapon' },
   { key: 'revolverHoleRadius', label: '左轮 · 弹孔大小', type: 'range', min: 10, max: 90, step: 2, suffix: 'px', group: 'weapon' },
   { key: 'revolverCooldown', label: '左轮 · 射击间隔', type: 'range', min: 120, max: 600, step: 10, suffix: 'ms', group: 'weapon' },
+  { key: 'revolverChambers', label: '左轮 · 弹仓容量', type: 'range', min: 1, max: 12, step: 1, group: 'weapon' },
+  { key: 'revolverReloadMs', label: '左轮 · 换弹时间', type: 'range', min: 200, max: 2500, step: 50, suffix: 'ms', group: 'weapon' },
   { key: 'machinegunHoleRadius', label: '机枪 · 弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'weapon' },
   { key: 'machinegunCooldown', label: '机枪 · 射速间隔', type: 'range', min: 30, max: 300, step: 10, suffix: 'ms', group: 'weapon' },
   { key: 'machinegunSpread', label: '机枪 · 散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'weapon' },

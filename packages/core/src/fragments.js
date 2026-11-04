@@ -57,6 +57,26 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
   }
 }
 
+// 弹孔升腾的烟雾（左轮）
+export function spawnSmoke(particles, cx, cy, radius) {
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * radius * 0.7;
+    particles.push({
+      x: cx + Math.cos(angle) * dist,
+      y: cy + Math.sin(angle) * dist,
+      vx: (Math.random() - 0.5) * 10,
+      vy: -10 - Math.random() * 16,
+      size: radius * (0.22 + Math.random() * 0.3),
+      color: 'rgba(205, 205, 205, 0.34)',
+      life: 1,
+      decay: 0.007 + Math.random() * 0.006,
+      isSmoke: true,
+    });
+  }
+}
+
 // iframe / video / canvas 克隆后是空白，用同尺寸色块替代，避免碎片出现空洞
 function cloneForFragment(el) {
   const clone = el.cloneNode(true);
@@ -244,12 +264,13 @@ export function spawnBlastHole(el, rect, centerX, centerY, options) {
   const toSubpath = (points) =>
     'M' + points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') + ' Z';
 
-  // 1) 不规则洞口：半径带随机抖动，避免看起来像规整的圆
-  const segments = 16;
+  // 1) 洞口：默认带随机抖动；左轮用光滑圆孔
+  const smooth = !!opts.smooth;
+  const segments = smooth ? 24 : 16;
   const holePoints = [];
   for (let i = 0; i < segments; i++) {
     const angle = (i / segments) * Math.PI * 2;
-    const jitter = 0.68 + Math.random() * 0.62;
+    const jitter = smooth ? 1 : 0.68 + Math.random() * 0.62;
     holePoints.push({
       x: lx + Math.cos(angle) * r * jitter,
       y: ly + Math.sin(angle) * r * jitter,
@@ -338,20 +359,23 @@ export function spawnBlastHole(el, rect, centerX, centerY, options) {
     }
   };
 
-  const mainCracks = 5;
-  for (let i = 0; i < mainCracks; i++) {
-    const angle = (i / mainCracks) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-    const startR = r * (0.62 + Math.random() * 0.18);
-    const origin = {
-      x: lx + Math.cos(angle) * startR,
-      y: ly + Math.sin(angle) * startR,
-    };
+  // 光滑弹孔不带裂缝
+  if (!smooth) {
+    const mainCracks = 5;
+    for (let i = 0; i < mainCracks; i++) {
+      const angle = (i / mainCracks) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const startR = r * (0.62 + Math.random() * 0.18);
+      const origin = {
+        x: lx + Math.cos(angle) * startR,
+        y: ly + Math.sin(angle) * startR,
+      };
 
-    // 长短、粗细各自独立浮动，避免五条裂缝看起来一个样
-    const lengthMul = crackLength * (0.5 + Math.random() * 1.9);
-    const widthMul = 0.5 + Math.random() * 1.2;
+      // 长短、粗细各自独立浮动，避免五条裂缝看起来一个样
+      const lengthMul = crackLength * (0.5 + Math.random() * 1.9);
+      const widthMul = 0.5 + Math.random() * 1.2;
 
-    grow(origin, angle, r * lengthMul, Math.max(3, r * crackWidth) * widthMul, 1);
+      grow(origin, angle, r * lengthMul, Math.max(3, r * crackWidth) * widthMul, 1);
+    }
   }
 
   const pathData =
@@ -370,8 +394,8 @@ export function spawnBlastHole(el, rect, centerX, centerY, options) {
   node.style.maskRepeat = 'no-repeat';
   node.style.maskSize = '100% 100%';
 
-  // 3) 洞口四周的碎块：三角形，从弹着点向外飞
-  const shardCount = 8;
+  // 3) 洞口四周的碎块：三角形，从弹着点向外飞（光滑弹孔不产生碎块）
+  const shardCount = smooth ? 0 : 8;
   for (let i = 0; i < shardCount; i++) {
     const angle = (i / shardCount) * Math.PI * 2 + Math.random() * 0.4;
     const inner = r * (0.85 + Math.random() * 0.2);

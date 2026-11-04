@@ -48,7 +48,7 @@ export function createSound(getConfig) {
     return ctx;
   }
 
-  // 叠刀 / 命中：金属“叮”，音高随刀数上升
+  // 叠刀 / 命中：金属“锵”，音高随刀数上升
   function slice(step) {
     if (!enabled()) return;
     const ctx = ready();
@@ -71,6 +71,23 @@ export function createSound(getConfig) {
     osc.connect(gain).connect(ctx.destination);
     osc.start(t);
     osc.stop(t + 0.18);
+
+    // 金属摩擦的瞬态，让“切”更像切
+    if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
+    const src = ctx.createBufferSource();
+    src.buffer = cachedNoise;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 2600;
+
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.12 * volume(), t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+
+    src.connect(hp).connect(ng).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + 0.08);
   }
 
   // 松手炸开：低频冲击 + 高频噪声
@@ -110,42 +127,90 @@ export function createSound(getConfig) {
     src.stop(t + 0.3);
   }
 
-  // 手枪：短促枪声（下滑方波 + 高频噪声）
-  function shot() {
+  // 枪声：左轮厚重、机枪轻快
+  function shot(kind) {
     if (!enabled()) return;
     const ctx = ready();
     if (!ctx) return;
 
+    const heavy = kind === 'revolver';
     const t = ctx.currentTime;
     const vol = volume();
 
+    // 枪口爆音
     const osc = ctx.createOscillator();
     const og = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(920, t);
-    osc.frequency.exponentialRampToValueAtTime(170, t + 0.08);
-    og.gain.setValueAtTime(0.2 * vol, t);
-    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    osc.type = heavy ? 'sawtooth' : 'square';
+    osc.frequency.setValueAtTime(heavy ? 700 : 980, t);
+    osc.frequency.exponentialRampToValueAtTime(heavy ? 85 : 240, t + (heavy ? 0.15 : 0.06));
+    og.gain.setValueAtTime((heavy ? 0.26 : 0.13) * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + (heavy ? 0.22 : 0.08));
     osc.connect(og).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.13);
+    osc.stop(t + (heavy ? 0.24 : 0.09));
 
+    // 火药碎裂声
     if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
     const src = ctx.createBufferSource();
     src.buffer = cachedNoise;
 
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 1800;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = heavy ? 900 : 2300;
+    bp.Q.value = heavy ? 0.9 : 1.4;
 
     const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0.16 * vol, t);
-    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    ng.gain.setValueAtTime((heavy ? 0.3 : 0.15) * vol, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + (heavy ? 0.28 : 0.07));
 
-    src.connect(hp).connect(ng).connect(ctx.destination);
+    src.connect(bp).connect(ng).connect(ctx.destination);
     src.start(t);
-    src.stop(t + 0.12);
+    src.stop(t + (heavy ? 0.3 : 0.09));
   }
 
-  return { slice, burst, shot, unlock: ready };
+  // 换弹：两声金属咔哒 + 弹仓旋转的低沉尾声
+  function reload() {
+    if (!enabled()) return;
+    const ctx = ready();
+    if (!ctx) return;
+
+    const vol = volume();
+    if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
+
+    const clickAt = (delay, freq, gain) => {
+      const t = ctx.currentTime + delay;
+      const src = ctx.createBufferSource();
+      src.buffer = cachedNoise;
+
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = freq;
+      bp.Q.value = 2.4;
+
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain * vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+
+      src.connect(bp).connect(g).connect(ctx.destination);
+      src.start(t);
+      src.stop(t + 0.08);
+    };
+
+    clickAt(0, 2400, 0.34);
+    clickAt(0.13, 1500, 0.26);
+
+    const t = ctx.currentTime + 0.02;
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(90, t + 0.12);
+    og.gain.setValueAtTime(0.1 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    osc.connect(og).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.15);
+  }
+
+  return { slice, burst, shot, reload, unlock: ready };
 }

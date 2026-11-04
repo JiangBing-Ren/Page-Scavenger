@@ -17,7 +17,9 @@ export const WEAPONS = Object.freeze([
     group: 'melee',
     input: 'drag',
     implemented: true,
-    desc: '按住左键划过，贯穿后切断。当前版本唯一的武器。',
+    unit: '刀',
+    scoring: 'area',
+    desc: '按住左键划过，贯穿后切断。',
   },
   {
     id: 'spear',
@@ -41,6 +43,8 @@ export const WEAPONS = Object.freeze([
     group: 'heavy',
     input: 'click',
     implemented: true,
+    unit: '炮',
+    scoring: 'area',
     desc: '点击处产生范围爆破，按半径摧毁目标。',
   },
   {
@@ -49,6 +53,9 @@ export const WEAPONS = Object.freeze([
     group: 'gun',
     input: 'click',
     implemented: true,
+    unit: '发',
+    scoring: 'hit',
+    hitPoints: 26,
     desc: '点一发打一枪：射速慢、弹孔大、后坐明显，适合精准点掉单个目标。',
   },
   {
@@ -57,6 +64,9 @@ export const WEAPONS = Object.freeze([
     group: 'gun',
     input: 'hold',
     implemented: true,
+    unit: '发',
+    scoring: 'hit',
+    hitPoints: 8,
     desc: '按住连射：按下点是枪口，朝光标持续扫射，弹孔小、带散布。',
   },
   {

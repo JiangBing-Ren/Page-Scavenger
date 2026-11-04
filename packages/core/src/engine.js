@@ -6,6 +6,7 @@ import {
   spawnDOMFragments,
   spawnMultiCutFragments,
   spawnBlastHole,
+  spawnSmoke,
   reslicePiece,
 } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
@@ -19,6 +20,7 @@ import {
   drawCloseButton,
   drawTracers,
   drawFiringGuide,
+  drawChambers,
 } from './render.js';
 
 const now = () => performance.now();
@@ -67,6 +69,8 @@ export function createCleaner(options) {
     slashCount: 0,
     lastFireAt: 0,
     firing: { active: false, muzzle: null, aim: null, lastShotAt: 0 },
+    chambers: 6,
+    reloadingUntil: 0,
     tracers: [],
   };
 
@@ -132,6 +136,11 @@ export function createCleaner(options) {
     if (!weapon) return { ok: false, reason: 'unknown' };
     if (!weapon.implemented) return { ok: false, reason: 'not-implemented' };
     CONFIG.weapon = weapon.id;
+    // 切到左轮时补满弹仓
+    if (weapon.id === 'revolver') {
+      state.chambers = Math.max(1, Math.floor(CONFIG.revolverChambers) || 6);
+      state.reloadingUntil = 0;
+    }
     return { ok: true, weapon: weapon.id };
   }
 
@@ -276,7 +285,7 @@ export function createCleaner(options) {
     if (state.tracers.length > 40) state.tracers.shift();
     state.tracers.push({ x1: muzzle.x, y1: muzzle.y, x2: end.x, y2: end.y, alpha: 1 });
 
-    sound.shot();
+    sound.shot('machinegun');
     state.shake = Math.max(state.shake, 0.22);
 
     if (hitTarget) {
@@ -294,9 +303,10 @@ export function createCleaner(options) {
     }
   }
 
-  // 左轮：点一次打一枪，命中光标下的单个目标，弹孔更大、后坐更明显
+  // 左轮：点一次打一枪，弹孔光滑并冒烟；打空后自动换弹
   function singleShotAt(x, y) {
     const t = now();
+    if (t < state.reloadingUntil) return;
     if (t - state.lastFireAt < CONFIG.revolverCooldown) return;
     state.lastFireAt = t;
 
@@ -314,9 +324,20 @@ export function createCleaner(options) {
       }
     } catch (e) {}
 
-    sound.shot();
+    sound.shot('revolver');
     state.shake = 0.6;
     state.shockwaves.push({ x, y, r: 10, alpha: 0.8 });
+
+    // 消耗一发；打空后进入换弹
+    state.chambers = Math.max(0, state.chambers - 1);
+    if (state.chambers === 0) {
+      sound.reload();
+      state.reloadingUntil = t + CONFIG.revolverReloadMs;
+      setTimeout(() => {
+        state.chambers = Math.max(1, Math.floor(CONFIG.revolverChambers) || 6);
+        state.reloadingUntil = 0;
+      }, CONFIG.revolverReloadMs);
+    }
 
     const target = hit
       ? findSlashTarget(hit, { config: CONFIG, marks: state.marks, canvas: state.canvas })
@@ -332,7 +353,7 @@ export function createCleaner(options) {
       return;
     }
 
-    holeDestroy(target, x, y, CONFIG.revolverHoleRadius);
+    holeDestroy(target, x, y, CONFIG.revolverHoleRadius, { smooth: true, smoke: true });
   }
 
   const saveMarks = () => {
@@ -406,7 +427,7 @@ export function createCleaner(options) {
       sound.slice(1);
 
       state.slashCount++;
-      onSlash({ el, rect, count: state.slashCount });
+      onSlash({ el, rect, count: state.slashCount, weapon: CONFIG.weapon });
     } catch (e) {
       console.error(e);
       hideEl(el);
@@ -416,7 +437,7 @@ export function createCleaner(options) {
   }
 
   // 炮/枪的摧毁：不做切线切分，直接在目标上挖洞
-  function holeDestroy(el, cx, cy, holeRadius) {
+  function holeDestroy(el, cx, cy, holeRadius, options) {
     if (!el || state.pending.has(el) || state.slashed.has(el)) return;
 
     state.pending.add(el);
@@ -446,11 +467,16 @@ export function createCleaner(options) {
         crackLength: CONFIG.crackLength,
         crackStartWidth: CONFIG.crackStartWidth,
         crackEndWidth: CONFIG.crackEndWidth,
+        smooth: !!(options && options.smooth),
       });
       spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
 
+      if (options && options.smoke) {
+        spawnSmoke(state.particles, cx, cy, holeRadius);
+      }
+
       state.slashCount++;
-      onSlash({ el, rect, count: state.slashCount, blast: true });
+      onSlash({ el, rect, count: state.slashCount, blast: true, weapon: CONFIG.weapon });
     } catch (e) {
       console.error(e);
       hideEl(el);
@@ -587,7 +613,7 @@ export function createCleaner(options) {
       spawnSparks(state.particles, rect, last.hitPoint, last.dir);
 
       state.slashCount++;
-      onSlash({ el, rect, count: state.slashCount, cuts: cuts.length });
+      onSlash({ el, rect, count: state.slashCount, cuts: cuts.length, weapon: CONFIG.weapon });
     } catch (e) {
       console.error(e);
       hideEl(el);
@@ -853,6 +879,7 @@ export function createCleaner(options) {
     updateParticles(ctx, state);
     drawFiringGuide(ctx, state);
     drawTracers(ctx, state);
+    drawChambers(ctx, state, CONFIG);
     drawCloseButton(ctx, state);
 
     if (shaking) ctx.restore();
@@ -1117,6 +1144,7 @@ export function createCleaner(options) {
       active: state.active,
       drawing: state.isDrawing,
       weapon: CONFIG.weapon,
+      chambers: state.chambers,
       activeHits: state.activeHits.size,
       locked: state.lockedTargets.size,
       cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),
