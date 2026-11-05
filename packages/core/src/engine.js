@@ -8,6 +8,7 @@ import {
   spawnBlastHole,
   spawnBlastBreakup,
   spawnSmoke,
+  spawnShell,
   reslicePiece,
 } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
@@ -22,6 +23,7 @@ import {
   drawTracers,
   drawFiringGuide,
   drawChambers,
+  drawMuzzleFlash,
 } from './render.js';
 
 const now = () => performance.now();
@@ -72,6 +74,7 @@ export function createCleaner(options) {
     firing: { active: false, muzzle: null, aim: null, lastShotAt: 0 },
     chambers: 6,
     reloadingUntil: 0,
+    muzzleFlash: null,
     tracers: [],
   };
 
@@ -187,7 +190,7 @@ export function createCleaner(options) {
       (target) => !found.some((other) => other !== target && other.contains(target))
     );
 
-    sound.burst();
+    sound.play('cannonFire');
     // 炮击的冲击更重：震屏加强，双层冲击波
     state.shake = 1.25;
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.25, alpha: 1 });
@@ -288,8 +291,13 @@ export function createCleaner(options) {
     if (state.tracers.length > 40) state.tracers.shift();
     state.tracers.push({ x1: muzzle.x, y1: muzzle.y, x2: end.x, y2: end.y, alpha: 1 });
 
-    sound.shot('machinegun');
+    sound.play('machinegunFire');
     state.shake = Math.max(state.shake, 0.22);
+
+    // 机枪枪口火光
+    if (CONFIG.muzzleFlashEnabled !== false) {
+      state.muzzleFlash = { x: muzzle.x, y: muzzle.y, until: now() + 70 };
+    }
 
     if (hitTarget) {
       const radius = Number.isFinite(opts.holeRadius)
@@ -327,14 +335,19 @@ export function createCleaner(options) {
       }
     } catch (e) {}
 
-    sound.shot('revolver');
+    sound.play('revolverFire');
     state.shake = 0.6;
     state.shockwaves.push({ x, y, r: 10, alpha: 0.8 });
+
+    // 抛壳
+    if (CONFIG.shellCasingsEnabled !== false) {
+      spawnShell(state.particles, x, y);
+    }
 
     // 消耗一发；打空后进入换弹
     state.chambers = Math.max(0, state.chambers - 1);
     if (state.chambers === 0) {
-      sound.reload();
+      sound.play('reload');
       state.reloadingUntil = t + CONFIG.revolverReloadMs;
       setTimeout(() => {
         state.chambers = Math.max(1, Math.floor(CONFIG.revolverChambers) || 6);
@@ -427,7 +440,7 @@ export function createCleaner(options) {
 
       spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
       spawnSparks(state.particles, rect, hitPoint, dir);
-      sound.slice(1);
+      sound.play('bladeCut');
 
       state.slashCount++;
       onSlash({ el, rect, count: state.slashCount, weapon: CONFIG.weapon });
@@ -472,8 +485,8 @@ export function createCleaner(options) {
           stepBase: Math.max(60, CONFIG.cutStepBase * 0.65),
           stepDecay: CONFIG.cutStepDecay,
           stepMin: CONFIG.cutStepMin,
-          onCrack: (n) => sound.slice(n),
-          onBurst: () => sound.burst(),
+          onCrack: (n) => sound.play('bladeCut'),
+          onBurst: () => sound.play('cannonBreak'),
         });
 
         if (!ok) {
@@ -486,7 +499,7 @@ export function createCleaner(options) {
             crackStartWidth: CONFIG.crackStartWidth,
             crackEndWidth: CONFIG.crackEndWidth,
           });
-          sound.burst();
+          sound.play('cannonBreak');
         }
       } else {
         spawnBlastHole(el, rect, cx, cy, {
@@ -506,6 +519,10 @@ export function createCleaner(options) {
       if (options && options.smoke) {
         spawnSmoke(state.particles, cx, cy, holeRadius);
       }
+
+      // 破坏音效与开火音效分离
+      if (CONFIG.weapon === 'revolver') sound.play('revolverHit');
+      else if (CONFIG.weapon === 'machinegun') sound.play('machinegunHit');
 
       state.slashCount++;
       onSlash({ el, rect, count: state.slashCount, blast: true, weapon: CONFIG.weapon });
@@ -600,7 +617,7 @@ export function createCleaner(options) {
     }
 
     if (state.cutSequence) state.cutSequence.index = index + 1;
-    sound.slice(index + 1);
+    sound.play('bladeCut');
 
     const gap = Math.max(
       CONFIG.cutStepMin,
@@ -633,7 +650,7 @@ export function createCleaner(options) {
 
       spawnMultiCutFragments(el, rect, cuts, CONFIG.hitStop);
 
-      sound.burst();
+      sound.play('bladeBreak');
       state.shockwaves.push({
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
@@ -800,6 +817,8 @@ export function createCleaner(options) {
     // 未实现的武器不响应输入
     if (!canSlash()) return;
 
+    sound.play('bladeSwing');
+
     e.preventDefault();
 
     state.isDrawing = true;
@@ -911,6 +930,7 @@ export function createCleaner(options) {
     updateParticles(ctx, state);
     drawFiringGuide(ctx, state);
     drawTracers(ctx, state);
+    drawMuzzleFlash(ctx, state);
     drawChambers(ctx, state, CONFIG);
     drawCloseButton(ctx, state);
 
@@ -1166,11 +1186,11 @@ export function createCleaner(options) {
     }
 
     if (kind === 'sound') {
-      if (weapon.id === 'blade') sound.slice(1);
-      else if (weapon.id === 'cannon') sound.burst();
-      else if (weapon.id === 'revolver') sound.shot('revolver');
-      else if (weapon.id === 'machinegun') sound.shot('machinegun');
-      else sound.slice(1);
+      if (weapon.id === 'blade') sound.play('bladeSwing');
+      else if (weapon.id === 'cannon') sound.play('cannonFire');
+      else if (weapon.id === 'revolver') sound.play('revolverFire');
+      else if (weapon.id === 'machinegun') sound.play('machinegunFire');
+      else sound.play('bladeSwing');
       return { ok: true, weapon: weapon.id };
     }
 

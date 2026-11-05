@@ -67,6 +67,21 @@ export const DEFAULT_CONFIG = {
   machinegunHoleRadius: 18,
   machinegunCooldown: 90,
   machinegunSpread: 12,
+  // 武器视效开关
+  muzzleFlashEnabled: true,
+  shellCasingsEnabled: true,
+  // 每类音效的独立音量倍率（0 = 静音），便于逐项对比差异
+  sfxBladeSwing: 1,
+  sfxBladeCut: 1,
+  sfxBladeBreak: 1,
+  sfxCannonFire: 1,
+  sfxCannonCrack: 1,
+  sfxCannonBreak: 1,
+  sfxRevolverFire: 1,
+  sfxRevolverHit: 1,
+  sfxMachinegunFire: 1,
+  sfxMachinegunHit: 1,
+  sfxReload: 1,
 };
 
 export const BASE_SELECTORS = [

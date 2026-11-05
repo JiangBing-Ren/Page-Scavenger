@@ -57,6 +57,22 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
   }
 }
 
+// 左轮抛壳：小铜壳向右上弹出后掉落
+export function spawnShell(particles, x, y) {
+  particles.push({
+    x,
+    y,
+    vx: 2 + Math.random() * 3,
+    vy: -6 - Math.random() * 4,
+    size: 4 + Math.random() * 2,
+    color: 'rgba(226, 184, 92, 0.95)',
+    life: 1,
+    decay: 0.012,
+    spin: Math.random() * Math.PI,
+    isShell: true,
+  });
+}
+
 // 弹孔升腾的烟雾（左轮）：颗粒更小更密，只轻轻上浮
 export function spawnSmoke(particles, cx, cy, radius) {
   const count = 26;

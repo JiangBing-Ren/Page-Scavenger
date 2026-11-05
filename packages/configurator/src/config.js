@@ -29,6 +29,7 @@ const BASIC_FIELDS = [
 // 高级参数按类别分组，顶部可按类别筛选，避免找武器参数时翻半天
 const ADV_GROUPS = [
   ['weapon', '武器'],
+  ['sfx', '音效'],
   ['multicut', '多刀'],
   ['target', '判定'],
   ['trail', '刀光'],
@@ -51,6 +52,21 @@ const ADV_FIELDS = [
   { key: 'machinegunHoleRadius', label: '机枪 · 弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'weapon' },
   { key: 'machinegunCooldown', label: '机枪 · 射速间隔', type: 'range', min: 30, max: 300, step: 10, suffix: 'ms', group: 'weapon' },
   { key: 'machinegunSpread', label: '机枪 · 散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'weapon' },
+  { key: 'muzzleFlashEnabled', label: '机枪 · 枪口火光', type: 'toggle', group: 'weapon' },
+  { key: 'shellCasingsEnabled', label: '左轮 · 抛壳', type: 'toggle', group: 'weapon' },
+
+  // 音效（逐个可调，便于对比差异）
+  { key: 'sfxBladeSwing', label: '刀 · 挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxBladeCut', label: '刀 · 切入', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxBladeBreak', label: '刀 · 碎裂', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxCannonFire', label: '炮 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxCannonCrack', label: '炮 · 裂缝', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxCannonBreak', label: '炮 · 爆散', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxRevolverFire', label: '左轮 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxRevolverHit', label: '左轮 · 弹孔', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxMachinegunFire', label: '机枪 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxMachinegunHit', label: '机枪 · 弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxReload', label: '左轮 · 换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   // 多刀蓄力
   { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
   { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },

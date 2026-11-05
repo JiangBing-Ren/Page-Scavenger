@@ -308,6 +308,12 @@ export function updateParticles(ctx, state) {
       p.vy *= 0.99;
       p.life -= p.decay;
       p.size += 0.16;
+    } else if (p.isShell) {
+      // 弹壳：抛物线飞出、翻滚
+      p.vy += 0.9;
+      p.vx *= 0.995;
+      p.spin = (p.spin || 0) + 0.3;
+      p.life -= p.decay;
     } else {
       p.vy += p.isChunk ? 1.2 : 0.8;
       p.vx *= 0.96;
@@ -329,6 +335,10 @@ export function updateParticles(ctx, state) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+    } else if (p.isShell) {
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.spin || 0);
+      ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
     } else if (p.isChunk) {
       ctx.translate(p.x, p.y);
       ctx.rotate(p.x * 0.05);
@@ -388,6 +398,32 @@ export function drawFiringGuide(ctx, state) {
   ctx.fillStyle = 'rgba(255, 214, 140, 0.9)';
   ctx.beginPath();
   ctx.arc(f.muzzle.x, f.muzzle.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// 枪口火光：短暂的一团亮斑
+export function drawMuzzleFlash(ctx, state) {
+  const f = state.muzzleFlash;
+  if (!f) return;
+
+  const left = f.until - now();
+  if (left <= 0) {
+    state.muzzleFlash = null;
+    return;
+  }
+
+  const k = Math.min(1, left / 70);
+
+  ctx.save();
+  ctx.globalAlpha = k;
+  const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 18);
+  g.addColorStop(0, 'rgba(255, 250, 220, 0.95)');
+  g.addColorStop(0.45, 'rgba(255, 200, 90, 0.6)');
+  g.addColorStop(1, 'rgba(255, 140, 40, 0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(f.x, f.y, 18, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
