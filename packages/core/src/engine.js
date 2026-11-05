@@ -220,41 +220,127 @@ export function createCleaner(options) {
     }
   }
 
-  // 黑洞：点击放置一个持续型奇点，存活期间把半径内的元素碎片化后吸入
+  // ---------- 黑洞 ----------
+
+  const holeAreaOf = (radius) => Math.PI * radius * radius;
+
+  function blackholeBaseRadius() {
+    return Math.max(40, Number(CONFIG.blackholeRadius) || 150);
+  }
+
+  // 上限是视口面积的比例，换算回半径
+  function blackholeMaxRadius() {
+    const ratio = Number(CONFIG.blackholeMaxAreaRatio);
+    const area =
+      Math.max(1, window.innerWidth * window.innerHeight) *
+      (Number.isFinite(ratio) ? Math.max(0, ratio) : 0.67);
+    return Math.sqrt(area / Math.PI);
+  }
+
+  // 引力场：视界外再延伸 R × fieldRatio（半径 1 → 场半径 1.5）
+  function fieldRadiusOf(hole) {
+    const ratio = Number(CONFIG.blackholeFieldRatio);
+    return hole.radius * (1 + (Number.isFinite(ratio) ? Math.max(0, ratio) : 0.5));
+  }
+
   function placeBlackhole(cx, cy) {
     const t = now();
-    if (t < state.blackholeCooldownUntil) return;
+    const existing = state.blackholes[0];
+    // 前一个洞还没缩完就继承它此刻的大小；完全消失后再点才是从头喂
+    const inherited = existing ? Math.max(2, existing.radius) : 0;
+
+    if (!inherited && t < state.blackholeCooldownUntil) return;
     state.blackholeCooldownUntil = t + Math.max(120, Number(CONFIG.blackholeCooldown) || 700);
 
-    const radius = Math.max(40, Number(CONFIG.blackholeRadius) || 150);
-    const duration = Math.max(300, Number(CONFIG.blackholeDurationMs) || 2400);
-
-    state.blackholes.push({
-      x: cx,
-      y: cy,
-      radius,
-      bornAt: t,
-      until: t + duration,
-      duration,
-      devoured: new Set(),
-    });
+    const holding = !!CONFIG.executeOnRelease;
+    state.blackholes = [
+      {
+        x: cx,
+        y: cy,
+        radius: Math.min(blackholeMaxRadius(), inherited || blackholeBaseRadius()),
+        baseRadius: blackholeBaseRadius(),
+        bornAt: t,
+        holding,
+        shrinkFrom: 0,
+        shrinkStart: 0,
+        shrinkUntil: 0,
+        devoured: new Set(),
+      },
+    ];
 
     sound.play('blackholeOpen');
     sound.startHum();
-    state.shake = Math.max(state.shake, 0.35);
-    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.2, alpha: 0.5 });
+    state.shake = Math.max(state.shake, 0.2);
+
+    // 非长按模式：点一下就开始收束，不再跟随光标
+    if (!holding) releaseBlackhole();
   }
 
-  // 吸入一个元素：真实元素立刻隐藏，碎块沿螺旋被拉向洞心
-  function devourTarget(hole, el) {
-    hole.devoured.add(el);
-    if (state.slashed.has(el)) return;
+  function followBlackhole(x, y) {
+    const hole = state.blackholes[0];
+    if (!hole || !hole.holding) return;
+    hole.x = x;
+    hole.y = y;
+  }
+
+  // 松手：停止跟随，按「基础时长 + 每大 3 倍加 1 秒」在原地缩到消失
+  function releaseBlackhole() {
+    const hole = state.blackholes[0];
+    if (!hole || hole.shrinkUntil) return;
+
+    hole.holding = false;
+    const growth = Math.max(1, hole.radius / Math.max(1, hole.baseRadius));
+    const extra = Math.floor(Math.log(growth) / Math.log(3)) * 1000;
+    const base = Number(CONFIG.blackholeDurationMs);
+    const life = Math.max(600, (Number.isFinite(base) ? base : 2400) + extra);
+
+    hole.shrinkFrom = hole.radius;
+    hole.shrinkStart = now();
+    hole.shrinkUntil = now() + life;
+  }
+
+  // 吸入一个元素：面积比决定整吞还是撕裂，真实元素立刻隐藏
+  function eatTarget(hole, el) {
+    if (state.slashed.has(el)) {
+      hole.devoured.add(el);
+      return;
+    }
 
     const rect = el.getBoundingClientRect();
-    if (rect.width < 4 || rect.height < 4) return;
+    const w = rect.width;
+    const h = rect.height;
+    if (w < 4 || h < 4) {
+      hole.devoured.add(el);
+      return;
+    }
+
+    const targetArea = w * h;
+    const holeArea = holeAreaOf(hole.radius);
+    const ratio = targetArea / Math.max(1, holeArea);
+
+    const captureRatio = Number(CONFIG.blackholeCaptureRatio);
+    const tearRatio = Number(CONFIG.blackholeTearRatio);
+    const capture = Number.isFinite(captureRatio) ? captureRatio : 1.35;
+    const tear = Number.isFinite(tearRatio) ? tearRatio : 0.7;
+
+    // 吸不动的目标不记账，等洞长大后再判定
+    if (ratio > capture) return;
+
+    // 面积够小但某一维超过直径时，也要按最长边撕开（长条广告）
+    const diameter = hole.radius * 2;
+    const tooLong = Math.max(w, h) > diameter;
+    const needTear = ratio > tear || tooLong;
+
+    let pieces = 1;
+    if (needTear) {
+      const byArea = Math.ceil(targetArea / Math.max(1, tear * holeArea));
+      const byLength = tooLong ? Math.ceil(Math.max(w, h) / Math.max(1, diameter)) : 1;
+      pieces = Math.min(12, Math.max(1, byArea, byLength));
+    }
 
     const sel = cssPath(el);
     const prevStyle = el.getAttribute('style');
+    hole.devoured.add(el);
 
     try {
       hideEl(el);
@@ -266,7 +352,15 @@ export function createCleaner(options) {
 
       spawnDevourFragments(el, rect, hole.x, hole.y, {
         filter: currentWeapon().hitFilter,
+        pieces,
+        axis: w >= h ? 'x' : 'y',
       });
+
+      // 成长：吸入面积按效率折算进黑洞面积，上限是视口面积的比例
+      const eff = Number(CONFIG.blackholeGrowEfficiency);
+      const gain = Number.isFinite(eff) ? Math.max(0, Math.min(1, eff)) : 0.15;
+      const grown = Math.min(holeAreaOf(blackholeMaxRadius()), holeArea + targetArea * gain);
+      hole.radius = Math.max(1, Math.sqrt(grown / Math.PI));
 
       // 一次吸进多个元素时别把吞噬音叠成一坨
       const t = now();
@@ -282,56 +376,60 @@ export function createCleaner(options) {
     }
   }
 
-  // 每帧结算所有黑洞：持续吸入半径内的元素，到期收场
+  // 每帧结算：先按收束进度缩半径，再扫描引力场里的元素
   function stepBlackholes() {
-    if (!state.blackholes.length) return;
+    const hole = state.blackholes[0];
+    if (!hole) return;
 
     const t = now();
-    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
 
-    for (let i = state.blackholes.length - 1; i >= 0; i--) {
-      const hole = state.blackholes[i];
-      if (t >= hole.until) {
-        state.blackholes.splice(i, 1);
-        continue;
-      }
-
-      // 圆心 + 两圈采样点：只扫圆心会漏掉外圈元素
-      const points = [{ x: hole.x, y: hole.y }];
-      for (const ring of [0.45, 0.85]) {
-        for (let k = 0; k < 12; k++) {
-          const angle = (k / 12) * Math.PI * 2 + ring;
-          points.push({
-            x: hole.x + Math.cos(angle) * hole.radius * ring,
-            y: hole.y + Math.sin(angle) * hole.radius * ring,
-          });
-        }
-      }
-
-      for (const point of points) {
-        let stack;
-        try {
-          stack = document.elementsFromPoint(point.x, point.y);
-        } catch (e) {
-          continue;
-        }
-        if (!stack) continue;
-
-        for (const node of stack) {
-          if (!node || node.nodeType !== 1) continue;
-          if (node === state.canvas || node === document.documentElement || node === document.body) {
-            continue;
-          }
-          if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
-
-          const target = findSlashTarget(node, env);
-          if (target && !hole.devoured.has(target)) devourTarget(hole, target);
-          break;
-        }
+    if (hole.shrinkUntil) {
+      const span = Math.max(1, hole.shrinkUntil - hole.shrinkStart);
+      const progress = Math.min(1, (t - hole.shrinkStart) / span);
+      hole.radius = hole.shrinkFrom * (1 - progress);
+      if (progress >= 1 || hole.radius < 2) {
+        state.blackholes = [];
+        sound.stopHum();
+        return;
       }
     }
 
-    if (!state.blackholes.length) sound.stopHum();
+    const reach = fieldRadiusOf(hole);
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+
+    // 圆心 + 三圈采样点：只扫圆心会漏掉场边缘的元素
+    const points = [{ x: hole.x, y: hole.y }];
+    for (const ring of [0.35, 0.65, 0.92]) {
+      for (let k = 0; k < 14; k++) {
+        const angle = (k / 14) * Math.PI * 2 + ring;
+        points.push({
+          x: hole.x + Math.cos(angle) * reach * ring,
+          y: hole.y + Math.sin(angle) * reach * ring,
+        });
+      }
+    }
+
+    for (const point of points) {
+      let stack;
+      try {
+        stack = document.elementsFromPoint(point.x, point.y);
+      } catch (e) {
+        continue;
+      }
+      if (!stack) continue;
+
+      for (const node of stack) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node === state.canvas || node === document.documentElement || node === document.body) {
+          continue;
+        }
+        if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+
+        const target = findSlashTarget(node, env);
+        if (target && !hole.devoured.has(target)) eatTarget(hole, target);
+        break;
+      }
+    }
   }
 
   function clearBlackholes() {
@@ -992,6 +1090,10 @@ export function createCleaner(options) {
       state.firing.aim = { x: e.clientX, y: e.clientY };
     }
 
+    // 长按模式下的黑洞跟着光标走；如果指针已经松开（在窗口外放的情况），顺手收束
+    if (state.blackholes[0] && state.blackholes[0].holding && e.buttons === 0) releaseBlackhole();
+    followBlackhole(e.clientX, e.clientY);
+
     if (!state.active || !state.isDrawing) return;
 
     const pt = { x: e.clientX, y: e.clientY, t: now() };
@@ -1019,6 +1121,7 @@ export function createCleaner(options) {
     if (!state.active) return;
 
     state.firing.active = false;
+    releaseBlackhole();
 
     state.isDrawing = false;
     state.prevPoint = null;
@@ -1402,8 +1505,11 @@ export function createCleaner(options) {
     if (kind === 'attack') {
       if (weapon.id === 'cannon') blastAt(x, y);
       else if (weapon.id === 'revolver') singleShotAt(x, y);
-      else if (weapon.id === 'blackhole') placeBlackhole(x, y);
-      else if (weapon.id === 'machinegun') {
+      else if (weapon.id === 'blackhole') {
+        // 预览时不能一直处于「按住」状态，放完自动收束
+        placeBlackhole(x, y);
+        setTimeout(() => releaseBlackhole(), 700);
+      } else if (weapon.id === 'machinegun') {
         fireBullet(
           { x: Math.max(4, x - 160), y },
           { x, y },
@@ -1456,6 +1562,10 @@ export function createCleaner(options) {
       chambers: state.chambers,
       shells: state.particles.filter((p) => p.isShell).length,
       blackholes: state.blackholes.length,
+      blackholeRadius: state.blackholes[0] ? Math.round(state.blackholes[0].radius) : 0,
+      blackholeAt: state.blackholes[0]
+        ? { x: Math.round(state.blackholes[0].x), y: Math.round(state.blackholes[0].y) }
+        : null,
       activeHits: state.activeHits.size,
       locked: state.lockedTargets.size,
       cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),

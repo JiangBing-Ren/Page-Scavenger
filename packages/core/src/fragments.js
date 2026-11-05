@@ -772,9 +772,28 @@ export function spawnDevourFragments(el, rect, targetX, targetY, options) {
   if (oversized) box = visibleBox(rect);
   if (box.width < 4 || box.height < 4) return false;
 
-  // 碎块密度跟着尺寸走：太大会卡，太小看不出碎裂
-  const cols = Math.max(2, Math.min(5, Math.round(box.width / 48)));
-  const rows = Math.max(2, Math.min(5, Math.round(box.height / 48)));
+  // 碎块切法：指定块数时按轴切条（黑洞撕裂用），否则按元素尺寸取网格
+  const wantPieces = Math.max(0, Math.floor(Number(opts.pieces) || 0));
+  let cols;
+  let rows;
+  if (wantPieces > 0) {
+    if (wantPieces === 1) {
+      cols = 1;
+      rows = 1;
+    } else if (opts.axis === 'x') {
+      cols = Math.min(12, wantPieces);
+      rows = 1;
+    } else if (opts.axis === 'y') {
+      cols = 1;
+      rows = Math.min(12, wantPieces);
+    } else {
+      cols = Math.min(5, Math.ceil(Math.sqrt(wantPieces)));
+      rows = Math.max(1, Math.ceil(wantPieces / cols));
+    }
+  } else {
+    cols = Math.max(2, Math.min(5, Math.round(box.width / 48)));
+    rows = Math.max(2, Math.min(5, Math.round(box.height / 48)));
+  }
   const cw = box.width / cols;
   const ch = box.height / rows;
 

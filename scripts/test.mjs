@@ -567,6 +567,14 @@ await check('黑洞是 drop 类、按面积计分、参数为正', () => {
   assert.ok(DEFAULT_CONFIG.blackholeRadius > 0);
   assert.ok(DEFAULT_CONFIG.blackholeDurationMs >= 300);
   assert.ok(DEFAULT_CONFIG.blackholeCooldown >= 0);
+  assert.ok(DEFAULT_CONFIG.blackholeFieldRatio > 0 && DEFAULT_CONFIG.blackholeFieldRatio <= 1);
+  assert.ok(DEFAULT_CONFIG.blackholeCaptureRatio > 1);
+  assert.ok(DEFAULT_CONFIG.blackholeTearRatio > 0);
+  assert.ok(DEFAULT_CONFIG.blackholeTearRatio < DEFAULT_CONFIG.blackholeCaptureRatio);
+  assert.ok(
+    DEFAULT_CONFIG.blackholeGrowEfficiency > 0 && DEFAULT_CONFIG.blackholeGrowEfficiency < 1
+  );
+  assert.ok(DEFAULT_CONFIG.blackholeMaxAreaRatio > 0 && DEFAULT_CONFIG.blackholeMaxAreaRatio < 1);
 });
 
 await check('爆破采样点：圆心 + 一圈环点', () => {

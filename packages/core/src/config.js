@@ -68,10 +68,20 @@ export const DEFAULT_CONFIG = {
   machinegunHoleRadius: 18,
   machinegunCooldown: 90,
   machinegunSpread: 12,
-  // 黑洞：点击放置，存活期间持续吸入半径内的元素
+  // 黑洞：点击放置奇点；长按模式下按住拖动，跟随光标吞吸
   blackholeRadius: 150,
   blackholeDurationMs: 2400,
   blackholeCooldown: 700,
+  // 引力场：在视界外再延伸 R × 该值（半径 1 → 场半径 1.5）
+  blackholeFieldRatio: 0.5,
+  // 面积比上限：目标面积 / 黑洞圆面积，超过就吸不动
+  blackholeCaptureRatio: 1.35,
+  // 撕裂阈值与碎片尺寸：超过该面积比就撕碎，每块面积 = 该值 × 黑洞面积
+  blackholeTearRatio: 0.7,
+  // 吸入面积折算成成长的效率
+  blackholeGrowEfficiency: 0.15,
+  // 黑洞面积上限 = 视口面积 × 该值
+  blackholeMaxAreaRatio: 0.67,
   // 武器视效开关
   muzzleFlashEnabled: true,
   shellCasingsEnabled: true,

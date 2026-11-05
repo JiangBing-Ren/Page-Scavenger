@@ -114,7 +114,7 @@ export const WEAPONS = Object.freeze([
     unit: '个',
     scoring: 'area',
     hitFilter: 'brightness(2.2) contrast(1.5) saturate(0.6)',
-    desc: '点击放置一个持续吸入周围元素的奇点：吸入的元素先碎后吞，存活期间一直生效。',
+    desc: '放出一个奇点：长按模式下按住拖动，吞得越多越大；松手后留在原地缩小消失。',
   },
 ]);
 

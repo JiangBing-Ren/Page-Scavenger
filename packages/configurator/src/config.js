@@ -18,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 const BASIC_FIELDS = [
   { key: 'targetSizeLevel', label: '尺寸挡位', type: 'select', options: SIZE_LEVELS, labels: SIZE_LABELS },
   { key: 'hitStop', label: '顿感强度', type: 'select', options: HIT_STOPS, labels: HIT_STOP_LABELS, suffix: 'ms' },
-  { key: 'executeOnRelease', label: '多刀蓄力（松手炸开）', type: 'toggle', hint: '按住可对同一目标反复叠刀' },
+  { key: 'executeOnRelease', label: '长按模式', type: 'toggle', hint: '按住可对同一目标反复叠刀；黑洞按住时跟随光标' },
   { key: 'comboCut', label: '连切碎片', type: 'toggle', hint: '切下来的碎片可再次切开' },
   { key: 'allowOversize', label: '允许超大容器', type: 'toggle', hint: '碎片按可见区域裁剪' },
   { key: 'forceMode', label: '自由切割', type: 'toggle', hint: '不限于广告选择器' },
@@ -58,6 +58,11 @@ const ADV_FIELDS = [
   { key: 'blackholeRadius', label: '黑洞 · 吸入半径', type: 'range', min: 60, max: 400, step: 10, suffix: 'px', group: 'weapon' },
   { key: 'blackholeDurationMs', label: '黑洞 · 存活时长', type: 'range', min: 600, max: 6000, step: 100, suffix: 'ms', group: 'weapon' },
   { key: 'blackholeCooldown', label: '黑洞 · 放置间隔', type: 'range', min: 120, max: 2000, step: 20, suffix: 'ms', group: 'weapon' },
+  { key: 'blackholeFieldRatio', label: '黑洞 · 引力场', type: 'range', min: 0.1, max: 1, step: 0.05, suffix: '×R', group: 'weapon' },
+  { key: 'blackholeCaptureRatio', label: '黑洞 · 可吸面积比', type: 'range', min: 1, max: 3, step: 0.05, group: 'weapon' },
+  { key: 'blackholeTearRatio', label: '黑洞 · 撕裂阈值', type: 'range', min: 0.3, max: 1.3, step: 0.05, group: 'weapon' },
+  { key: 'blackholeGrowEfficiency', label: '黑洞 · 成长效率', type: 'range', min: 0, max: 0.6, step: 0.01, group: 'weapon' },
+  { key: 'blackholeMaxAreaRatio', label: '黑洞 · 面积上限', type: 'range', min: 0.1, max: 1, step: 0.01, group: 'weapon' },
 
   // 音效（逐个可调，便于对比差异）
   { key: 'sfxBladeSwing', label: '刀 · 挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
@@ -75,7 +80,7 @@ const ADV_FIELDS = [
   { key: 'sfxBlackholeEat', label: '黑洞 · 吞噬', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxReload', label: '左轮 · 换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxShellDrop', label: '左轮 · 弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  // 多刀蓄力
+  // 长按模式（刀：多刀蓄力；黑洞：按住拖动吞吸）
   { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
   { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },
   { key: 'cutStepBase', label: '逐刀起始间隔', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'multicut' },
