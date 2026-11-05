@@ -397,9 +397,9 @@ export function drawChambers(ctx, state, config) {
   if (!config || config.weapon !== 'revolver') return;
 
   const total = Math.max(1, Math.floor(config.revolverChambers) || 6);
-  const R = 21;
+  const R = 42;
   const cx = 24 + R;
-  const cy = Math.max(R + 8, state.cssH - 96);
+  const cy = Math.max(R + 8, state.cssH - 132);
   const reloading = state.reloadingUntil > now();
   const reloadMs = Math.max(1, config.revolverReloadMs || 900);
 

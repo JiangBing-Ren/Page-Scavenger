@@ -318,7 +318,7 @@ function updatePreviewButton() {
   $('preview').textContent = previewing ? '退出试切（Esc）' : '开始试切';
 }
 
-function togglePreview() {
+function ensureCleaner() {
   if (!cleaner) {
     cleaner = createCleaner({
       config: { ...draft },
@@ -330,11 +330,23 @@ function togglePreview() {
   } else {
     cleaner.setConfig({ ...draft });
   }
+  return cleaner;
+}
 
-  if (previewing) cleaner.deactivate();
-  else cleaner.activate();
-
+function togglePreview() {
+  const c = ensureCleaner();
+  if (previewing) c.deactivate();
+  else c.activate();
   updatePreviewButton();
+}
+
+function demoPoint() {
+  const card = document.querySelector('#demo .demo-card');
+  const rect = (card || $('demo')).getBoundingClientRect();
+  return {
+    x: Math.round(rect.left + rect.width / 2),
+    y: Math.round(rect.top + rect.height / 2),
+  };
 }
 
 async function init() {
@@ -385,6 +397,28 @@ async function init() {
   });
 
   $('preview').addEventListener('click', togglePreview);
+
+  for (const button of document.querySelectorAll('[data-preview]')) {
+    button.addEventListener('click', () => {
+      const point = demoPoint();
+      ensureCleaner().preview(point.x, point.y, button.dataset.preview);
+    });
+  }
+
+  const demoHtml = $('demo').innerHTML;
+  $('demo-reset').addEventListener('click', () => {
+    $('demo').innerHTML = demoHtml;
+  });
+
+  // 自检入口：直接返回 preview 的执行结果
+  window.__configPreview = (kind) => {
+    const point = demoPoint();
+    try {
+      return JSON.stringify(ensureCleaner().preview(point.x, point.y, kind));
+    } catch (e) {
+      return JSON.stringify({ ok: false, error: String(e && e.message) });
+    }
+  };
 }
 
 // 只接受已知字段；类型不符的跳过，避免把界面写坏

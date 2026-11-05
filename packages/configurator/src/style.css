@@ -295,6 +295,19 @@ input[type="checkbox"]:checked::after {
   margin-bottom: 14px;
 }
 
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* 预览按钮必须盖在斩击画布之上，否则激活后点不到 */
+.preview-actions button {
+  position: relative;
+  z-index: 2147483648;
+}
+
 .demo-card {
   border: 1px solid var(--line);
   border-radius: 10px;

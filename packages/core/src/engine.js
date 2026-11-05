@@ -1123,6 +1123,99 @@ export function createCleaner(options) {
     }
   }
 
+  // 配置器预览：可单独播放声音 / 特效 / 滤镜，或触发一次真实攻击
+  function preview(x, y, kind) {
+    const weapon = currentWeapon();
+    if (!weapon) return { ok: false, reason: 'no-weapon' };
+
+    // 视口外的坐标拿不到命中元素
+    if (kind !== 'sound' && (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight)) {
+      return { ok: false, reason: 'out-of-view' };
+    }
+
+    if (kind === 'sound') {
+      if (weapon.id === 'blade') sound.slice(1);
+      else if (weapon.id === 'cannon') sound.burst();
+      else if (weapon.id === 'revolver') sound.shot('revolver');
+      else if (weapon.id === 'machinegun') sound.shot('machinegun');
+      else sound.slice(1);
+      return { ok: true, weapon: weapon.id };
+    }
+
+    if (kind === 'filter') {
+      let hit = null;
+      try {
+        const stack = document.elementsFromPoint(x, y) || [];
+        for (const node of stack) {
+          if (!node || node.nodeType !== 1) continue;
+          if (node === state.canvas || node === document.documentElement || node === document.body) {
+            continue;
+          }
+          if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+          hit = node;
+          break;
+        }
+      } catch (e) {}
+
+      if (!hit) return { ok: false, reason: 'no-element' };
+
+      const filter = weapon.hitFilter || 'brightness(2.4) contrast(1.5)';
+      const prevFilter = hit.style.filter;
+      const prevTransition = hit.style.transition;
+      hit.style.transition = 'filter 0.18s ease-out';
+      hit.style.filter = filter;
+      setTimeout(() => {
+        hit.style.filter = prevFilter || '';
+        setTimeout(() => {
+          hit.style.transition = prevTransition || '';
+        }, 220);
+      }, 90);
+      return { ok: true, weapon: weapon.id };
+    }
+
+    if (!state.active) activate();
+
+    if (kind === 'effect') {
+      state.shockwaves.push({ x, y, r: 8, alpha: 1 });
+      spawnSparks(
+        state.particles,
+        { left: x - 12, top: y - 12, width: 24, height: 24 },
+        { x, y },
+        { x: 1, y: 0 }
+      );
+      if (weapon.id === 'revolver') spawnSmoke(state.particles, x, y, CONFIG.revolverHoleRadius);
+      return { ok: true, weapon: weapon.id };
+    }
+
+    if (kind === 'attack') {
+      if (weapon.id === 'cannon') blastAt(x, y);
+      else if (weapon.id === 'revolver') singleShotAt(x, y);
+      else if (weapon.id === 'machinegun') {
+        fireBullet(
+          { x: Math.max(4, x - 160), y },
+          { x, y },
+          { holeRadius: CONFIG.machinegunHoleRadius, spread: 0 }
+        );
+      } else {
+        let hit = null;
+        try {
+          const stack = document.elementsFromPoint(x, y) || [];
+          for (const node of stack) {
+            if (!node || node.nodeType !== 1) continue;
+            if (node === state.canvas || node === document.documentElement) continue;
+            if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+            hit = node;
+            break;
+          }
+        } catch (e) {}
+        if (hit) slash(hit, { x, y }, { x: 1, y: 0 }, { x, y }, []);
+      }
+      return { ok: true, weapon: weapon.id };
+    }
+
+    return { ok: false, reason: 'unknown-kind' };
+  }
+
   return {
     ready,
     activate,
@@ -1139,6 +1232,7 @@ export function createCleaner(options) {
     getWeapons: () => WEAPONS,
     getWeapon: () => currentWeapon(),
     setWeapon,
+    preview,
     // 调试/自检用：不参与游戏逻辑
     getDebugState: () => ({
       active: state.active,

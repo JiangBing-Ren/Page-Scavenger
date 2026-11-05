@@ -19,6 +19,7 @@ export const WEAPONS = Object.freeze([
     implemented: true,
     unit: '刀',
     scoring: 'area',
+    hitFilter: 'brightness(2.5) contrast(1.5)',
     desc: '按住左键划过，贯穿后切断。',
   },
   {
@@ -45,6 +46,7 @@ export const WEAPONS = Object.freeze([
     implemented: true,
     unit: '炮',
     scoring: 'area',
+    hitFilter: 'brightness(3.4) contrast(1.7) saturate(0.75)',
     desc: '点击处产生范围爆破，按半径摧毁目标。',
   },
   {
@@ -56,6 +58,7 @@ export const WEAPONS = Object.freeze([
     unit: '发',
     scoring: 'hit',
     hitPoints: 26,
+    hitFilter: 'brightness(3) contrast(1.6) saturate(0.8)',
     desc: '点一发打一枪：射速慢、弹孔大、后坐明显，适合精准点掉单个目标。',
   },
   {
@@ -67,6 +70,7 @@ export const WEAPONS = Object.freeze([
     unit: '发',
     scoring: 'hit',
     hitPoints: 8,
+    hitFilter: 'brightness(2.2) contrast(1.3)',
     desc: '按住连射：按下点是枪口，朝光标持续扫射，弹孔小、带散布。',
   },
   {

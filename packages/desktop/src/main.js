@@ -702,6 +702,26 @@ app.whenReady().then(() => {
             ' const weaponChip = Array.from(document.querySelectorAll("#adv-filter .chip")).find((c) => c.textContent === "武器");' +
             ' if (weaponChip) weaponChip.click();' +
             ' form.filteredFields = document.querySelectorAll("#adv .field").length;' +
+            ' const clickPreview = (kind) => {' +
+            '   const btn = document.querySelector(`[data-preview="${kind}"]`);' +
+            '   if (btn) btn.click();' +
+            ' };' +
+            ' const demoBox = document.getElementById("demo");' +
+            ' if (demoBox) demoBox.scrollIntoView({ block: "center" });' +
+            ' form.demoInView = demoBox ? demoBox.getBoundingClientRect().top < window.innerHeight : false;' +
+            ' clickPreview("sound");' +
+            ' clickPreview("effect");' +
+            ' form.attackResult = window.__configPreview ? window.__configPreview("attack") : "no-hook";' +
+            ' const card = document.querySelector("#demo .demo-card");' +
+            ' const anyHidden = (root) => {' +
+            '   if (!root) return false;' +
+            '   const nodes = [root, ...root.querySelectorAll("*")];' +
+            '   return nodes.some((n) => getComputedStyle(n).visibility === "hidden");' +
+            ' };' +
+            ' form.cardHidden = card ? anyHidden(card) : "none";' +
+            ' const resetBtn = document.getElementById("demo-reset");' +
+            ' if (resetBtn) resetBtn.click();' +
+            ' form.cardRestored = card ? getComputedStyle(card).visibility !== "hidden" : "none";' +
             ' return form;' +
             '})())'
         );

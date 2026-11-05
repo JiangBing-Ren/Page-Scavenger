@@ -48,7 +48,7 @@ export function createSound(getConfig) {
     return ctx;
   }
 
-  // 叠刀 / 命中：金属“锵”，音高随刀数上升
+  // 刀：挥砍气流 + 金属余韵，音高随叠刀数上升
   function slice(step) {
     if (!enabled()) return;
     const ctx = ready();
@@ -56,38 +56,38 @@ export function createSound(getConfig) {
 
     const n = Math.max(1, Math.min(12, Number(step) || 1));
     const t = ctx.currentTime;
+    const vol = volume();
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(560 + n * 45, t);
-    osc.frequency.exponentialRampToValueAtTime(1300 + n * 70, t + 0.055);
-
-    const peak = 0.16 * volume();
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(peak, t + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.18);
-
-    // 金属摩擦的瞬态，让“切”更像切
     if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
+
     const src = ctx.createBufferSource();
     src.buffer = cachedNoise;
 
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 2600;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(600 + n * 60, t);
+    bp.frequency.exponentialRampToValueAtTime(3200 + n * 120, t + 0.12);
 
     const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0.12 * volume(), t);
-    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(0.24 * vol, t + 0.03);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
 
-    src.connect(hp).connect(ng).connect(ctx.destination);
+    src.connect(bp).connect(ng).connect(ctx.destination);
     src.start(t);
-    src.stop(t + 0.08);
+    src.stop(t + 0.2);
+
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1400 + n * 80, t);
+    osc.frequency.exponentialRampToValueAtTime(2400 + n * 90, t + 0.06);
+    og.gain.setValueAtTime(0.09 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    osc.connect(og).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.16);
   }
 
   // 松手炸开：低频冲击 + 高频噪声
@@ -99,32 +99,51 @@ export function createSound(getConfig) {
     const t = ctx.currentTime;
     const vol = volume();
 
+    // 低频轰击
     const osc = ctx.createOscillator();
     const og = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(150, t);
-    osc.frequency.exponentialRampToValueAtTime(38, t + 0.34);
-    og.gain.setValueAtTime(0.45 * vol, t);
-    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    osc.frequency.setValueAtTime(95, t);
+    osc.frequency.exponentialRampToValueAtTime(28, t + 0.5);
+    og.gain.setValueAtTime(0.6 * vol, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.58);
     osc.connect(og).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.42);
+    osc.stop(t + 0.6);
 
     if (!cachedNoise) cachedNoise = noiseBuffer(ctx);
-    const src = ctx.createBufferSource();
-    src.buffer = cachedNoise;
+
+    // 低频余震
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = cachedNoise;
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420;
+
+    const rg = ctx.createGain();
+    rg.gain.setValueAtTime(0.34 * vol, t);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+
+    rumble.connect(lp).connect(rg).connect(ctx.destination);
+    rumble.start(t);
+    rumble.stop(t + 0.47);
+
+    // 爆裂瞬态
+    const crack = ctx.createBufferSource();
+    crack.buffer = cachedNoise;
 
     const hp = ctx.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = 1100;
+    hp.frequency.value = 1800;
 
-    const ng = ctx.createGain();
-    ng.gain.setValueAtTime(0.3 * vol, t);
-    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    const cg = ctx.createGain();
+    cg.gain.setValueAtTime(0.3 * vol, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
 
-    src.connect(hp).connect(ng).connect(ctx.destination);
-    src.start(t);
-    src.stop(t + 0.3);
+    crack.connect(hp).connect(cg).connect(ctx.destination);
+    crack.start(t);
+    crack.stop(t + 0.09);
   }
 
   // 枪声：左轮低频闷响 + 锐利爆裂；机枪高频短促的「哒」
