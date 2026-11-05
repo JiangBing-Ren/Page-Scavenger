@@ -40,7 +40,7 @@ export function createCleaner(options) {
   const onSlash = typeof opts.onSlash === 'function' ? opts.onSlash : () => {};
 
   const CONFIG = Object.assign({}, DEFAULT_CONFIG, opts.config || {});
-  const sound = createSound(() => CONFIG);
+  const sound = createSound(() => CONFIG, opts.soundAssets || {});
 
   const state = {
     active: false,

@@ -623,6 +623,15 @@ ipcMain.on('ui:open-external', (_e, url) => {
   if (/^https?:/i.test(target)) shell.openExternal(target);
 });
 
+// 采样音效的字节：页面 preload 启动时同步取一次（file:// 在页面里不能 fetch）
+ipcMain.on('asset:shell-drop', (event) => {
+  try {
+    event.returnValue = fs.readFileSync(path.join(assetsDir(), 'assets', 'shell-drop.mp3'));
+  } catch (e) {
+    event.returnValue = null;
+  }
+});
+
 ipcMain.handle('guide:info', () => {
   const dirs = extensionDirs();
   return {

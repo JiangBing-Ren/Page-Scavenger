@@ -34,6 +34,7 @@
     "page": "config/index.html",
     "open_in_tab": true
   },
+  "web_accessible_resources": ["assets/*"],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

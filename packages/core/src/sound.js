@@ -26,8 +26,70 @@ function noiseBuffer(ctx) {
 
 let cachedNoise = null;
 
-export function createSound(getConfig) {
+export function createSound(getConfig, assets) {
   const config = typeof getConfig === 'function' ? getConfig : () => ({});
+
+  // 采样音效：宿主可给 URL（扩展用 chrome-extension://）或原始字节（桌面用 IPC 读文件）。
+  // 取不到或解码失败时回落到合成音。
+  const assetUrls = assets || {};
+  const sampleBuffers = {};
+  const sampleFailed = {};
+
+  function loadSample(name) {
+    const asset = assetUrls[name];
+    if (!asset || sampleBuffers[name] || sampleFailed[name]) return;
+
+    const ctx = context();
+    if (!ctx) return;
+
+    sampleFailed[name] = true; // 先标记，成功后清除，避免重复请求
+
+    const decode = (buf) => {
+      ctx
+        .decodeAudioData(buf)
+        .then((decoded) => {
+          sampleBuffers[name] = decoded;
+          sampleFailed[name] = false;
+        })
+        .catch(() => {});
+    };
+
+    if (typeof asset === 'string') {
+      fetch(asset)
+        .then((res) => res.arrayBuffer())
+        .then(decode)
+        .catch(() => {});
+      return;
+    }
+
+    // Uint8Array / ArrayBuffer：桌面版通过 IPC 读到文件字节
+    try {
+      const copy = asset instanceof ArrayBuffer ? asset.slice(0) : asset.buffer.slice(0);
+      decode(copy);
+    } catch (e) {}
+  }
+
+  function playSample(name, vol) {
+    const buf = sampleBuffers[name];
+    if (!buf) {
+      loadSample(name);
+      return false;
+    }
+
+    const ctx = ready();
+    if (!ctx) return false;
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+
+    const gain = ctx.createGain();
+    gain.gain.value = Math.min(1, vol);
+
+    src.connect(gain).connect(ctx.destination);
+    src.start();
+    return true;
+  }
 
   function enabled() {
     const c = config() || {};
@@ -185,10 +247,15 @@ export function createSound(getConfig) {
       setTimeout(() => tone(ctx, 0.32 * vol, 'square', 240, 80, 0.34, 0.01), 20);
     },
 
-    // 弹壳落地：清脆的金属弹跳声
+    // 弹壳落地：优先用采样，合成兜底用非谐波分音模拟金属撞击
     shellDrop(ctx, vol) {
-      click(ctx, 0.6 * vol, 3000, 0.09, 3.2);
-      tone(ctx, 0.14 * vol, 'triangle', 2400, 1500, 0.12, 0.003);
+      const base = 900 + Math.random() * 320;
+      const ratios = [1, 2.76, 5.4, 8.93];
+      ratios.forEach((ratio, i) => {
+        const partial = (0.22 / (i + 1)) * vol;
+        tone(ctx, partial, 'sine', base * ratio, base * ratio * 0.9, 0.22 - i * 0.04, 0.002);
+      });
+      click(ctx, 0.28 * vol, 4200, 0.02, 4);
     },
   };
 
@@ -196,6 +263,9 @@ export function createSound(getConfig) {
     if (!enabled()) return false;
     const gain = level(name);
     if (gain <= 0.002) return false;
+
+    // 有采样资源的名字优先播采样
+    if (assetUrls[name] && playSample(name, gain)) return true;
 
     const ctx = ready();
     if (!ctx) return false;

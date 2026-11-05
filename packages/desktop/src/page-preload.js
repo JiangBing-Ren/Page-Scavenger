@@ -52,8 +52,14 @@ function boot() {
 
   const freeScore = createFreeScore();
 
+  let shellDropUrl = '';
+  try {
+    shellDropUrl = ipcRenderer.sendSync('asset:shell-drop') || '';
+  } catch (e) {}
+
   const cleaner = createCleaner({
     storage,
+    soundAssets: shellDropUrl ? { shellDrop: shellDropUrl } : {},
     onStateChange(active) {
       freeScore.setActive(active);
       ipcRenderer.send('adslash:state', { active, config: cleaner.getConfig() });

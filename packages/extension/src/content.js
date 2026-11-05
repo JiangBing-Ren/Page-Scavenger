@@ -49,6 +49,9 @@ function ensure() {
 
   cleaner = createCleaner({
     storage: createStorage(),
+    soundAssets: {
+      shellDrop: ext.runtime.getURL('assets/shell-drop.mp3'),
+    },
     onStateChange(active) {
       freeScore.setActive(active);
       reportState(active);

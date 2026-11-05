@@ -193,6 +193,7 @@ async function main() {
     // 只拷贝静态文件，config.js 用打包产物，不能用源码覆盖
     await copyFile('packages/configurator/src/index.html', `${host.dir}/config/index.html`);
     await copyFile('packages/configurator/src/style.css', `${host.dir}/config/style.css`);
+    await copyDir('packages/core/assets', `${host.dir}/assets`);
     await copyDir('packages/extension/icons', `${host.dir}/icons`);
     await writeManifest(host.manifest, host.dir);
   }
@@ -238,6 +239,7 @@ async function main() {
   );
   await copyFile('packages/configurator/src/index.html', 'dist/desktop/config/index.html');
   await copyFile('packages/configurator/src/style.css', 'dist/desktop/config/style.css');
+  await copyDir('packages/core/assets', 'dist/desktop/assets');
 
   for (const r of results) {
     console.log(`  ${String(r.bytes).padStart(7)} B  ${r.outRel}`);
