@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('desktop', {
     get: () => ipcRenderer.invoke('config:get'),
     set: (config) => ipcRenderer.invoke('config:set', config),
   },
+  // 配置器试听也要放采样音效，file:// 不能 fetch，改走主进程同步读字节
+  assets: {
+    read: (file) => ipcRenderer.sendSync('asset:read', file),
+  },
   on: {
     nav: (cb) => ipcRenderer.on('ui:nav', (_event, patch) => cb(patch)),
     game: (cb) => ipcRenderer.on('ui:game', (_event, state) => cb(state)),

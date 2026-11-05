@@ -1,5 +1,6 @@
 import { createCleaner } from '../../core/src/engine.js';
 import { createFreeScore } from '../../core/src/freescore.js';
+import { sampleUrls } from '../../core/src/sound.js';
 
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -49,9 +50,7 @@ function ensure() {
 
   cleaner = createCleaner({
     storage: createStorage(),
-    soundAssets: {
-      shellDrop: ext.runtime.getURL('assets/shell-drop.mp3'),
-    },
+    soundAssets: sampleUrls((p) => ext.runtime.getURL(p)),
     onStateChange(active) {
       freeScore.setActive(active);
       reportState(active);

@@ -1,5 +1,6 @@
 import { createCleaner } from '../../core/src/engine.js';
 import { createFreeScore } from '../../core/src/freescore.js';
+import { sampleBytes } from '../../core/src/sound.js';
 
 const { ipcRenderer } = require('electron');
 
@@ -52,14 +53,12 @@ function boot() {
 
   const freeScore = createFreeScore();
 
-  let shellDropUrl = '';
-  try {
-    shellDropUrl = ipcRenderer.sendSync('asset:shell-drop') || '';
-  } catch (e) {}
+  // file:// 页面不能 fetch，采样音效由主进程读成字节传进来
+  const soundAssets = sampleBytes((file) => ipcRenderer.sendSync('asset:read', file));
 
   const cleaner = createCleaner({
     storage,
-    soundAssets: shellDropUrl ? { shellDrop: shellDropUrl } : {},
+    soundAssets,
     onStateChange(active) {
       freeScore.setActive(active);
       ipcRenderer.send('adslash:state', { active, config: cleaner.getConfig() });

@@ -513,7 +513,7 @@ export function drawChambers(ctx, state, config) {
   const cx = 24 + R;
   const cy = Math.max(R + 8, state.cssH - 132);
   const reloading = state.reloadingUntil > now();
-  const reloadMs = Math.max(1, config.revolverReloadMs || 900);
+  const reloadMs = Math.max(1, config.revolverReloadMs || 1600);
 
   // 换弹时弹巢旋转
   let spin = 0;

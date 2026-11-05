@@ -624,9 +624,15 @@ ipcMain.on('ui:open-external', (_e, url) => {
 });
 
 // 采样音效的字节：页面 preload 启动时同步取一次（file:// 在页面里不能 fetch）
-ipcMain.on('asset:shell-drop', (event) => {
+// 只放行 assets/ 下形如 *.mp3 的纯文件名，避免变成任意读文件的通道
+ipcMain.on('asset:read', (event, file) => {
+  const name = String(file || '');
+  if (!/^[a-z0-9-]+\.mp3$/i.test(name)) {
+    event.returnValue = null;
+    return;
+  }
   try {
-    event.returnValue = fs.readFileSync(path.join(assetsDir(), 'assets', 'shell-drop.mp3'));
+    event.returnValue = fs.readFileSync(path.join(assetsDir(), 'assets', name));
   } catch (e) {
     event.returnValue = null;
   }

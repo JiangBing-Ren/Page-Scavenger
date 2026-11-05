@@ -1,6 +1,41 @@
-// 用 Web Audio 现场合成音效，不依赖音频文件。
+// 音效分两层：能取到采样文件就播采样，取不到或解码失败时回落到 Web Audio 合成。
 // 每个效果是独立的声音（VOICES），各自受 sfx<Name> 音量倍率控制，
 // 便于在配置器里逐项对比、单独静音。
+
+// 采样清单。宿主只需按 file 提供 URL（扩展）或字节（桌面）；
+// rate 是固定播放倍速，jitter 是每次播放的随机倍速浮动幅度（0 = 不浮动）；
+// gain 是采样自身的响度校准，配置里的倍率 1 就对应「校准后的这一档」。
+export const SAMPLE_ASSETS = {
+  shellDrop: { file: 'shell-drop.mp3', gain: 0.6 },
+  // 单发枪声：轻微音高浮动，避免连射时完全一致
+  revolverFire: { file: 'revolver-fire.mp3', jitter: 0.16, gain: 0.7 },
+  // 换弹原始 3.216 秒，2 倍速压到约 1.6 秒，与 revolverReloadMs 对齐
+  reload: { file: 'revolver-reload.mp3', rate: 2, jitter: 0, gain: 2 },
+};
+
+export function sampleUrls(getUrl) {
+  const out = {};
+  Object.keys(SAMPLE_ASSETS).forEach((name) => {
+    const meta = SAMPLE_ASSETS[name];
+    const url = getUrl('assets/' + meta.file);
+    if (url) out[name] = { url, rate: meta.rate, jitter: meta.jitter, gain: meta.gain };
+  });
+  return out;
+}
+
+// 桌面版：页面不能 fetch file://，改由 IPC 读字节
+export function sampleBytes(read) {
+  const out = {};
+  Object.keys(SAMPLE_ASSETS).forEach((name) => {
+    const meta = SAMPLE_ASSETS[name];
+    let data = null;
+    try {
+      data = read(meta.file);
+    } catch (e) {}
+    if (data) out[name] = { data, rate: meta.rate, jitter: meta.jitter, gain: meta.gain };
+  });
+  return out;
+}
 
 let shared = null;
 
@@ -34,6 +69,14 @@ export function createSound(getConfig, assets) {
   const assetUrls = assets || {};
   const sampleBuffers = {};
   const sampleFailed = {};
+  const sampleMeta = {};
+
+  // 三种写法都接受：URL 字符串、原始字节、或 { url | data, rate, jitter }
+  function describe(asset) {
+    if (typeof asset === 'string') return { url: asset };
+    if (asset && (asset.url || asset.data)) return asset;
+    return { data: asset };
+  }
 
   function loadSample(name) {
     const asset = assetUrls[name];
@@ -42,6 +85,8 @@ export function createSound(getConfig, assets) {
     const ctx = context();
     if (!ctx) return;
 
+    const desc = describe(asset);
+    sampleMeta[name] = desc;
     sampleFailed[name] = true; // 先标记，成功后清除，避免重复请求
 
     const decode = (buf) => {
@@ -54,8 +99,8 @@ export function createSound(getConfig, assets) {
         .catch(() => {});
     };
 
-    if (typeof asset === 'string') {
-      fetch(asset)
+    if (desc.url) {
+      fetch(desc.url)
         .then((res) => res.arrayBuffer())
         .then(decode)
         .catch(() => {});
@@ -64,9 +109,23 @@ export function createSound(getConfig, assets) {
 
     // Uint8Array / ArrayBuffer：桌面版通过 IPC 读到文件字节
     try {
-      const copy = asset instanceof ArrayBuffer ? asset.slice(0) : asset.buffer.slice(0);
+      const raw = desc.data;
+      // Buffer 可能来自共享内存池，必须按 byteOffset/byteLength 截取
+      const copy =
+        raw instanceof ArrayBuffer
+          ? raw.slice(0)
+          : raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
       decode(copy);
     } catch (e) {}
+  }
+
+  let preloaded = false;
+  // 采样解码是异步的，第一次播放等不到：在首次播放时把全部采样排进队列，
+  // 这样第一发枪声不会退回合成音
+  function preloadSamples() {
+    if (preloaded) return;
+    preloaded = true;
+    Object.keys(assetUrls).forEach(loadSample);
   }
 
   function playSample(name, vol) {
@@ -79,12 +138,20 @@ export function createSound(getConfig, assets) {
     const ctx = ready();
     if (!ctx) return false;
 
+    const meta = sampleMeta[name] || {};
+    const base = Number(meta.rate) > 0 ? Number(meta.rate) : 1;
+    const jitter = Number.isFinite(Number(meta.jitter))
+      ? Math.max(0, Math.min(0.5, Number(meta.jitter)))
+      : 0.2;
+    // 采样响度校准：配置倍率 1 即校准后的基准，所以这里允许超过 1
+    const trim = Number(meta.gain) > 0 ? Number(meta.gain) : 1;
+
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    src.playbackRate.value = base * (1 - jitter / 2 + Math.random() * jitter);
 
     const gain = ctx.createGain();
-    gain.gain.value = Math.min(1, vol);
+    gain.gain.value = Math.min(4, vol * trim);
 
     src.connect(gain).connect(ctx.destination);
     src.start();
@@ -263,6 +330,8 @@ export function createSound(getConfig, assets) {
     if (!enabled()) return false;
     const gain = level(name);
     if (gain <= 0.002) return false;
+
+    preloadSamples();
 
     // 有采样资源的名字优先播采样
     if (assetUrls[name] && playSample(name, gain)) return true;

@@ -6,6 +6,7 @@ import {
   HIT_STOP_LABELS,
 } from '../../core/src/config.js';
 import { createCleaner } from '../../core/src/engine.js';
+import { sampleUrls, sampleBytes } from '../../core/src/sound.js';
 import { WEAPONS, WEAPON_GROUPS } from '../../core/src/weapons.js';
 
 const ext = typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null;
@@ -351,10 +352,29 @@ function updatePreviewButton() {
   $('preview').textContent = previewing ? '退出试切（Esc）' : '开始试切';
 }
 
+// 试听要和实际游玩听到的一致，所以配置页同样挂上采样音效；
+// 扩展用 runtime URL，桌面配置窗口用 IPC 读字节，都取不到就退回合成音
+let cachedSoundAssets = null;
+function soundAssets() {
+  if (cachedSoundAssets) return cachedSoundAssets;
+  cachedSoundAssets = {};
+  try {
+    if (isExt) {
+      cachedSoundAssets = sampleUrls((p) => ext.runtime.getURL(p));
+    } else if (window.desktop && window.desktop.assets) {
+      cachedSoundAssets = sampleBytes((file) => window.desktop.assets.read(file));
+    }
+  } catch (e) {
+    cachedSoundAssets = {};
+  }
+  return cachedSoundAssets;
+}
+
 function ensureCleaner() {
   if (!cleaner) {
     cleaner = createCleaner({
       config: { ...draft },
+      soundAssets: soundAssets(),
       onStateChange(active) {
         previewing = active;
         updatePreviewButton();
