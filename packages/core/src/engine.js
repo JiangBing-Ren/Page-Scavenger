@@ -6,6 +6,7 @@ import {
   spawnDOMFragments,
   spawnMultiCutFragments,
   spawnBlastHole,
+  spawnBlastBreakup,
   spawnSmoke,
   reslicePiece,
 } from './fragments.js';
@@ -193,7 +194,9 @@ export function createCleaner(options) {
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.55, alpha: 0.65 });
 
     for (const target of targets) {
-      holeDestroy(target, cx, cy, CONFIG.cannonRadius * CONFIG.blastHoleScale);
+      holeDestroy(target, cx, cy, CONFIG.cannonRadius * CONFIG.blastHoleScale, {
+        breakup: true,
+      });
     }
 
     if (!targets.length) {
@@ -459,16 +462,45 @@ export function createCleaner(options) {
       state.undoStack.push({ sel, prevStyle });
       if (state.undoStack.length > 20) state.undoStack.shift();
 
-      spawnBlastHole(el, rect, cx, cy, {
-        holeRadius: Math.min(holeRadius, Math.max(rect.width, rect.height) * 0.75),
-        hitStop: CONFIG.hitStop,
-        holdMs: CONFIG.blastHoleHold,
-        crackWidth: CONFIG.crackWidth,
-        crackLength: CONFIG.crackLength,
-        crackStartWidth: CONFIG.crackStartWidth,
-        crackEndWidth: CONFIG.crackEndWidth,
-        smooth: !!(options && options.smooth),
-      });
+      const hole = Math.min(holeRadius, Math.max(rect.width, rect.height) * 0.75);
+
+      if (options && options.breakup) {
+        // 炮：切成多块后由慢到快崩开
+        const ok = spawnBlastBreakup(el, rect, cx, cy, {
+          holeRadius: hole,
+          hitStop: CONFIG.hitStop,
+          stepBase: Math.max(60, CONFIG.cutStepBase * 0.65),
+          stepDecay: CONFIG.cutStepDecay,
+          stepMin: CONFIG.cutStepMin,
+          onCrack: (n) => sound.slice(n),
+          onBurst: () => sound.burst(),
+        });
+
+        if (!ok) {
+          spawnBlastHole(el, rect, cx, cy, {
+            holeRadius: hole,
+            hitStop: CONFIG.hitStop,
+            holdMs: CONFIG.blastHoleHold,
+            crackWidth: CONFIG.crackWidth,
+            crackLength: CONFIG.crackLength,
+            crackStartWidth: CONFIG.crackStartWidth,
+            crackEndWidth: CONFIG.crackEndWidth,
+          });
+          sound.burst();
+        }
+      } else {
+        spawnBlastHole(el, rect, cx, cy, {
+          holeRadius: hole,
+          hitStop: CONFIG.hitStop,
+          holdMs: CONFIG.blastHoleHold,
+          crackWidth: CONFIG.crackWidth,
+          crackLength: CONFIG.crackLength,
+          crackStartWidth: CONFIG.crackStartWidth,
+          crackEndWidth: CONFIG.crackEndWidth,
+          smooth: !!(options && options.smooth),
+        });
+      }
+
       spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
 
       if (options && options.smoke) {

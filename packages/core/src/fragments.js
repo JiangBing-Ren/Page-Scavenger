@@ -77,6 +77,137 @@ export function spawnSmoke(particles, cx, cy, radius) {
   }
 }
 
+// 炮击：从弹着点切出多条贯穿到边缘的裂缝，把目标碎成多块，
+// 再按由慢到快的节奏逐块崩开，最后整体炸散。
+export function spawnBlastBreakup(el, rect, centerX, centerY, options) {
+  const opts = options || {};
+  const hitStop = Number.isFinite(opts.hitStop) ? opts.hitStop : 0;
+  const stepBase = Number.isFinite(opts.stepBase) ? opts.stepBase : 110;
+  const stepDecay = Number.isFinite(opts.stepDecay) ? opts.stepDecay : 0.72;
+  const stepMin = Number.isFinite(opts.stepMin) ? opts.stepMin : 35;
+
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) box = visibleBox(rect);
+  if (box.width < 4 || box.height < 4) return false;
+
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  const lx = clamp(centerX - box.left, 0, box.width);
+  const ly = clamp(centerY - box.top, 0, box.height);
+
+  const full = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ];
+
+  // 1) 以弹着点为中心做 3~4 条切割线，切出多块
+  let pieces = [{ poly: full }];
+  const cutCount = 3 + Math.floor(Math.random() * 2);
+  const baseAngle = Math.random() * Math.PI;
+
+  for (let i = 0; i < cutCount; i++) {
+    const angle = baseAngle + (i / cutCount) * Math.PI + (Math.random() - 0.5) * 0.6;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const next = [];
+
+    for (const piece of pieces) {
+      const { left, right } = splitPolygon(piece.poly, { x: lx, y: ly }, dx, dy);
+      for (const poly of [left, right]) {
+        if (poly.length >= 3 && polygonArea(poly) >= 40) next.push({ poly });
+      }
+    }
+
+    pieces = next;
+  }
+
+  if (pieces.length < 2) return false;
+
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(3.2) contrast(1.6) saturate(0.8)');
+
+  // 2) 圆孔遮罩（炮的弹着点）
+  const holeRadius = Math.max(8, Number(opts.holeRadius) || 60);
+  const segments = 16;
+  const holePoints = [];
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const jitter = 0.68 + Math.random() * 0.62;
+    holePoints.push({
+      x: lx + Math.cos(a) * holeRadius * jitter,
+      y: ly + Math.sin(a) * holeRadius * jitter,
+    });
+  }
+
+  const holePath =
+    'M' + holePoints.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') + ' Z';
+  const maskSvg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
+    `<path d="M0 0 H${box.width.toFixed(1)} V${box.height.toFixed(1)} H0 Z ${holePath}" ` +
+    `fill="#fff" fill-rule="evenodd"/></svg>`;
+  const maskUrl = `url("data:image/svg+xml,${encodeURIComponent(maskSvg)}")`;
+
+  // 3) 生成碎块
+  const nodes = pieces.map(({ poly }) => {
+    const node = build(poly);
+    node.style.maskImage = maskUrl;
+    node.style.webkitMaskImage = maskUrl;
+    node.style.maskSize = '100% 100%';
+    node.style.maskRepeat = 'no-repeat';
+
+    let sx = 0;
+    let sy = 0;
+    for (const p of poly) {
+      sx += p.x;
+      sy += p.y;
+    }
+
+    return { node, cx: sx / poly.length, cy: sy / poly.length };
+  });
+
+  const centroidDir = (item) => {
+    let vx = item.cx - lx;
+    let vy = item.cy - ly;
+    const d = Math.hypot(vx, vy) || 1;
+    return { x: vx / d, y: vy / d };
+  };
+
+  // 4) 由慢到快逐块裂开（与刀的逐刀节奏一致）
+  let delay = hitStop;
+  nodes.forEach((item, index) => {
+    const dir = centroidDir(item);
+    const at = delay;
+    delay += Math.max(stepMin, stepBase * Math.pow(stepDecay, index));
+
+    setTimeout(() => {
+      item.node.style.transition = 'transform 0.16s ease-out';
+      item.node.style.transform =
+        `translate3d(${dir.x * 3}px, ${dir.y * 3}px, 0) rotate(${(Math.random() - 0.5) * 2}deg)`;
+      if (typeof opts.onCrack === 'function') opts.onCrack(index + 1);
+    }, at);
+  });
+
+  // 5) 全部裂开后整体炸散
+  setTimeout(() => {
+    if (typeof opts.onBurst === 'function') opts.onBurst();
+    for (const item of nodes) {
+      const dir = centroidDir(item);
+      const power = 190 + Math.random() * 200;
+      animate(item.node, {
+        tx: dir.x * power,
+        ty: dir.y * power + 260,
+        rot: (Math.random() - 0.5) * 260,
+        axis: Math.random() > 0.5 ? 1 : -1,
+        hitStop: 0,
+      });
+    }
+  }, delay + 140);
+
+  return true;
+}
+
 // iframe / video / canvas 克隆后是空白，用同尺寸色块替代，避免碎片出现空洞
 function cloneForFragment(el) {
   const clone = el.cloneNode(true);
