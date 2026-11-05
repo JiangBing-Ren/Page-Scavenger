@@ -110,8 +110,11 @@ export const WEAPONS = Object.freeze([
     name: '黑洞',
     group: 'special',
     input: 'drop',
-    implemented: false,
-    desc: '放置后持续吸附并销毁周围元素。',
+    implemented: true,
+    unit: '个',
+    scoring: 'area',
+    hitFilter: 'brightness(2.2) contrast(1.5) saturate(0.6)',
+    desc: '点击放置一个持续吸入周围元素的奇点：吸入的元素先碎后吞，存活期间一直生效。',
   },
 ]);
 

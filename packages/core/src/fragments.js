@@ -762,6 +762,90 @@ export function spawnBlastHole(el, rect, centerX, centerY, options) {
   return true;
 }
 
+// 黑洞：把元素切成网格碎块，再沿螺旋轨迹吸进洞心。
+// 真实元素由调用方负责隐藏，这里只负责碎块的出场与收束。
+export function spawnDevourFragments(el, rect, targetX, targetY, options) {
+  const opts = options || {};
+
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) box = visibleBox(rect);
+  if (box.width < 4 || box.height < 4) return false;
+
+  // 碎块密度跟着尺寸走：太大会卡，太小看不出碎裂
+  const cols = Math.max(2, Math.min(5, Math.round(box.width / 48)));
+  const rows = Math.max(2, Math.min(5, Math.round(box.height / 48)));
+  const cw = box.width / cols;
+  const ch = box.height / rows;
+
+  const filter = opts.filter || 'brightness(2.2) contrast(1.4) saturate(0.7)';
+  const build = makeBuilder(el, rect, box, oversized, filter);
+  const nodes = [];
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const x0 = col * cw;
+      const y0 = row * ch;
+      const poly = [
+        { x: x0, y: y0 },
+        { x: x0 + cw, y: y0 },
+        { x: x0 + cw, y: y0 + ch },
+        { x: x0, y: y0 + ch },
+      ];
+      const node = build(poly);
+      // 旋转与缩放要绕碎块自身的中心，否则会绕整块元素的中心乱甩
+      node.style.transformOrigin = `${x0 + cw / 2}px ${y0 + ch / 2}px`;
+      nodes.push({ node, cx: box.left + x0 + cw / 2, cy: box.top + y0 + ch / 2 });
+    }
+  }
+
+  for (const { node, cx, cy } of nodes) {
+    const dx = targetX - cx;
+    const dy = targetY - cy;
+    const dist = Math.hypot(dx, dy);
+    const delay = Math.min(260, dist * 0.18);
+    const duration = 420 + Math.min(320, dist * 0.35);
+    const spin = (Math.random() < 0.5 ? -1 : 1) * (160 + Math.random() * 160);
+    // 中途加一点横向偏移，走成螺旋而不是直线
+    const midX = dx * 0.55 - dy * 0.22;
+    const midY = dy * 0.55 + dx * 0.22;
+
+    try {
+      node.animate(
+        [
+          { transform: 'translate3d(0,0,0) scale(1) rotate(0deg)', opacity: 1 },
+          {
+            transform: `translate3d(${midX.toFixed(1)}px, ${midY.toFixed(1)}px, 0) scale(0.55) rotate(${(spin * 0.5).toFixed(0)}deg)`,
+            opacity: 0.85,
+            offset: 0.55,
+          },
+          {
+            transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) scale(0.05) rotate(${spin.toFixed(0)}deg)`,
+            opacity: 0,
+          },
+        ],
+        {
+          duration,
+          delay,
+          easing: 'cubic-bezier(0.4, 0.05, 0.7, 0.4)',
+          fill: 'forwards',
+        }
+      );
+    } catch (e) {
+      // 不支持 Web Animations 时退回线性位移
+      node.style.transition = `transform ${duration}ms ease-in, opacity ${duration}ms ease-in`;
+      node.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.05) rotate(${spin}deg)`;
+      node.style.opacity = '0';
+    }
+
+    setTimeout(() => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, delay + duration + 40);
+  }
+
+  return nodes.length > 0;
+}
+
 export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
   if (!entryPoint) return;
 

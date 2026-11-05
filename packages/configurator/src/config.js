@@ -55,6 +55,9 @@ const ADV_FIELDS = [
   { key: 'machinegunSpread', label: '机枪 · 散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'weapon' },
   { key: 'muzzleFlashEnabled', label: '机枪 · 枪口火光', type: 'toggle', group: 'weapon' },
   { key: 'shellCasingsEnabled', label: '左轮 · 抛壳', type: 'toggle', group: 'weapon' },
+  { key: 'blackholeRadius', label: '黑洞 · 吸入半径', type: 'range', min: 60, max: 400, step: 10, suffix: 'px', group: 'weapon' },
+  { key: 'blackholeDurationMs', label: '黑洞 · 存活时长', type: 'range', min: 600, max: 6000, step: 100, suffix: 'ms', group: 'weapon' },
+  { key: 'blackholeCooldown', label: '黑洞 · 放置间隔', type: 'range', min: 120, max: 2000, step: 20, suffix: 'ms', group: 'weapon' },
 
   // 音效（逐个可调，便于对比差异）
   { key: 'sfxBladeSwing', label: '刀 · 挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
@@ -67,6 +70,9 @@ const ADV_FIELDS = [
   { key: 'sfxRevolverHit', label: '左轮 · 弹孔', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxMachinegunFire', label: '机枪 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxMachinegunHit', label: '机枪 · 弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxBlackholeOpen', label: '黑洞 · 生成', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxBlackholeHum', label: '黑洞 · 吸附', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxBlackholeEat', label: '黑洞 · 吞噬', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxReload', label: '左轮 · 换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxShellDrop', label: '左轮 · 弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   // 多刀蓄力

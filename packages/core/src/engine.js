@@ -11,6 +11,7 @@ import {
   spawnSmoke,
   spawnShell,
   reslicePiece,
+  spawnDevourFragments,
 } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
@@ -25,6 +26,7 @@ import {
   drawFiringGuide,
   drawChambers,
   drawMuzzleFlash,
+  drawBlackholes,
 } from './render.js';
 
 const now = () => performance.now();
@@ -77,6 +79,9 @@ export function createCleaner(options) {
     reloadingUntil: 0,
     muzzleFlash: null,
     tracers: [],
+    blackholes: [],
+    blackholeCooldownUntil: 0,
+    lastEatSfxAt: 0,
   };
 
   let saveTimer = null;
@@ -140,6 +145,8 @@ export function createCleaner(options) {
     const weapon = getWeapon(id);
     if (!weapon) return { ok: false, reason: 'unknown' };
     if (!weapon.implemented) return { ok: false, reason: 'not-implemented' };
+    // 离开黑洞时把还在吸的奇点一起收掉，避免切武器后残留
+    if (CONFIG.weapon === 'blackhole' && weapon.id !== 'blackhole') clearBlackholes();
     CONFIG.weapon = weapon.id;
     // 切到左轮时补满弹仓
     if (weapon.id === 'revolver') {
@@ -211,6 +218,126 @@ export function createCleaner(options) {
         { x: 1, y: 0 }
       );
     }
+  }
+
+  // 黑洞：点击放置一个持续型奇点，存活期间把半径内的元素碎片化后吸入
+  function placeBlackhole(cx, cy) {
+    const t = now();
+    if (t < state.blackholeCooldownUntil) return;
+    state.blackholeCooldownUntil = t + Math.max(120, Number(CONFIG.blackholeCooldown) || 700);
+
+    const radius = Math.max(40, Number(CONFIG.blackholeRadius) || 150);
+    const duration = Math.max(300, Number(CONFIG.blackholeDurationMs) || 2400);
+
+    state.blackholes.push({
+      x: cx,
+      y: cy,
+      radius,
+      bornAt: t,
+      until: t + duration,
+      duration,
+      devoured: new Set(),
+    });
+
+    sound.play('blackholeOpen');
+    sound.startHum();
+    state.shake = Math.max(state.shake, 0.35);
+    state.shockwaves.push({ x: cx, y: cy, r: radius * 0.2, alpha: 0.5 });
+  }
+
+  // 吸入一个元素：真实元素立刻隐藏，碎块沿螺旋被拉向洞心
+  function devourTarget(hole, el) {
+    hole.devoured.add(el);
+    if (state.slashed.has(el)) return;
+
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) return;
+
+    const sel = cssPath(el);
+    const prevStyle = el.getAttribute('style');
+
+    try {
+      hideEl(el);
+      state.slashed.add(el);
+      releaseLift(el);
+      if (sel) addMark(sel);
+      state.undoStack.push({ sel, prevStyle });
+      if (state.undoStack.length > 20) state.undoStack.shift();
+
+      spawnDevourFragments(el, rect, hole.x, hole.y, {
+        filter: currentWeapon().hitFilter,
+      });
+
+      // 一次吸进多个元素时别把吞噬音叠成一坨
+      const t = now();
+      if (t - state.lastEatSfxAt > 70) {
+        state.lastEatSfxAt = t;
+        sound.play('blackholeEat');
+      }
+
+      state.slashCount++;
+      onSlash({ el, rect, count: state.slashCount, blast: true, weapon: 'blackhole' });
+    } catch (e) {
+      hideEl(el);
+    }
+  }
+
+  // 每帧结算所有黑洞：持续吸入半径内的元素，到期收场
+  function stepBlackholes() {
+    if (!state.blackholes.length) return;
+
+    const t = now();
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+
+    for (let i = state.blackholes.length - 1; i >= 0; i--) {
+      const hole = state.blackholes[i];
+      if (t >= hole.until) {
+        state.blackholes.splice(i, 1);
+        continue;
+      }
+
+      // 圆心 + 两圈采样点：只扫圆心会漏掉外圈元素
+      const points = [{ x: hole.x, y: hole.y }];
+      for (const ring of [0.45, 0.85]) {
+        for (let k = 0; k < 12; k++) {
+          const angle = (k / 12) * Math.PI * 2 + ring;
+          points.push({
+            x: hole.x + Math.cos(angle) * hole.radius * ring,
+            y: hole.y + Math.sin(angle) * hole.radius * ring,
+          });
+        }
+      }
+
+      for (const point of points) {
+        let stack;
+        try {
+          stack = document.elementsFromPoint(point.x, point.y);
+        } catch (e) {
+          continue;
+        }
+        if (!stack) continue;
+
+        for (const node of stack) {
+          if (!node || node.nodeType !== 1) continue;
+          if (node === state.canvas || node === document.documentElement || node === document.body) {
+            continue;
+          }
+          if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+
+          const target = findSlashTarget(node, env);
+          if (target && !hole.devoured.has(target)) devourTarget(hole, target);
+          break;
+        }
+      }
+    }
+
+    if (!state.blackholes.length) sound.stopHum();
+  }
+
+  function clearBlackholes() {
+    state.blackholes = [];
+    state.blackholeCooldownUntil = 0;
+    sound.stopHum();
   }
 
   // 机枪：枪口固定在按下点，按住期间朝光标方向按间隔持续扫射
@@ -833,6 +960,13 @@ export function createCleaner(options) {
       return;
     }
 
+    // 放置类武器：点击放下，之后由渲染循环持续结算（黑洞）
+    if (weapon && weapon.implemented && weapon.input === 'drop') {
+      e.preventDefault();
+      if (weapon.id === 'blackhole') placeBlackhole(e.clientX, e.clientY);
+      return;
+    }
+
     // 未实现的武器不响应输入
     if (!canSlash()) return;
 
@@ -942,8 +1076,10 @@ export function createCleaner(options) {
     }
 
     fireStep();
+    stepBlackholes();
 
     drawTargetBoxes(ctx, state);
+    drawBlackholes(ctx, state);
     drawEffects(ctx, state);
     drawTrail(ctx, state, CONFIG);
     updateParticles(ctx, state, (type) => sound.play(type));
@@ -1101,6 +1237,7 @@ export function createCleaner(options) {
     state.firing.active = false;
     state.firing.muzzle = null;
     state.tracers = [];
+    clearBlackholes();
     destroyCanvas();
 
     onStateChange(false);
@@ -1209,7 +1346,11 @@ export function createCleaner(options) {
       else if (weapon.id === 'cannon') sound.play('cannonFire');
       else if (weapon.id === 'revolver') sound.play('revolverFire');
       else if (weapon.id === 'machinegun') sound.play('machinegunFire');
-      else sound.play('bladeSwing');
+      else if (weapon.id === 'blackhole') {
+        sound.play('blackholeOpen');
+        sound.play('blackholeHum');
+        sound.play('blackholeEat');
+      } else sound.play('bladeSwing');
       return { ok: true, weapon: weapon.id };
     }
 
@@ -1261,6 +1402,7 @@ export function createCleaner(options) {
     if (kind === 'attack') {
       if (weapon.id === 'cannon') blastAt(x, y);
       else if (weapon.id === 'revolver') singleShotAt(x, y);
+      else if (weapon.id === 'blackhole') placeBlackhole(x, y);
       else if (weapon.id === 'machinegun') {
         fireBullet(
           { x: Math.max(4, x - 160), y },
@@ -1313,6 +1455,7 @@ export function createCleaner(options) {
       weapon: CONFIG.weapon,
       chambers: state.chambers,
       shells: state.particles.filter((p) => p.isShell).length,
+      blackholes: state.blackholes.length,
       activeHits: state.activeHits.size,
       locked: state.lockedTargets.size,
       cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),

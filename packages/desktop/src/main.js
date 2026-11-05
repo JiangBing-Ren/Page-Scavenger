@@ -289,7 +289,8 @@ function createWindow() {
                 ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
                 ' const dbg = window.__levelDebug ? window.__levelDebug() : null;' +
                 ' const shells = dbg && dbg.engine ? dbg.engine.shells : "n/a";' +
-                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes, badMasks, shells });' +
+                ' const blackholes = dbg && dbg.engine ? dbg.engine.blackholes : "n/a";' +
+                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes, badMasks, shells, blackholes });' +
                 '})()'
             );
 

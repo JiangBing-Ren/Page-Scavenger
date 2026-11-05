@@ -606,3 +606,79 @@ export function drawCloseButton(ctx, state) {
   ctx.stroke();
   ctx.restore();
 }
+
+// 黑洞：事件视界（纯黑圆）+ 反向旋转的吸积弧 + 外沿吸附丝 + 剩余时间细弧。
+// 只用暗色与低饱和冷色，避免整屏闪烁。
+export function drawBlackholes(ctx, state) {
+  const holes = state.blackholes;
+  if (!holes || !holes.length) return;
+
+  const t = now();
+
+  for (const hole of holes) {
+    const life = Math.max(1, hole.until - hole.bornAt);
+    const age = t - hole.bornAt;
+    const open = Math.min(1, age / 160);
+    const closing = Math.min(1, Math.max(0, (hole.until - t) / 220));
+    const grow = open * closing;
+    const r = hole.radius * 0.34 * grow * (1 + Math.sin(t / 180) * 0.03);
+    if (r < 1) continue;
+
+    ctx.save();
+
+    // 事件视界与外围空间弯曲
+    const grad = ctx.createRadialGradient(hole.x, hole.y, r * 0.15, hole.x, hole.y, r * 2.1);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    grad.addColorStop(0.42, 'rgba(3, 5, 10, 0.96)');
+    grad.addColorStop(0.72, 'rgba(18, 14, 38, 0.5)');
+    grad.addColorStop(1, 'rgba(3, 5, 10, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, r * 2.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 吸积盘：三层反向旋转的弧
+    for (let i = 0; i < 3; i++) {
+      const rr = r * (1.32 + i * 0.3);
+      const spin = (t / (520 + i * 180)) * (i % 2 ? -1 : 1);
+      ctx.strokeStyle =
+        i === 0 ? 'rgba(158, 128, 255, 0.5)' : `rgba(0, 214, 214, ${0.2 - i * 0.05})`;
+      ctx.lineWidth = Math.max(1, r * (0.055 - i * 0.012));
+      ctx.beginPath();
+      ctx.arc(hole.x, hole.y, rr, spin, spin + Math.PI * (0.95 + i * 0.18));
+      ctx.stroke();
+    }
+
+    // 世界边缘的亮环
+    ctx.strokeStyle = 'rgba(198, 182, 255, 0.78)';
+    ctx.lineWidth = Math.max(1.2, r * 0.06);
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 吸附丝：外沿向内收的短线，随时间绕行
+    for (let i = 0; i < 12; i++) {
+      const phase = (t / 700 + i / 12) % 1;
+      const angle = (i / 12) * Math.PI * 2 + t / 1100;
+      const r0 = hole.radius * (0.96 - phase * 0.2);
+      const r1 = r0 - hole.radius * 0.14;
+      const alpha = 0.1 + 0.16 * Math.sin(Math.PI * phase);
+      ctx.strokeStyle = `rgba(150, 132, 255, ${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(hole.x + Math.cos(angle) * r0, hole.y + Math.sin(angle) * r0);
+      ctx.lineTo(hole.x + Math.cos(angle) * r1, hole.y + Math.sin(angle) * r1);
+      ctx.stroke();
+    }
+
+    // 剩余时间：从满圈开始收短
+    const left = Math.max(0, (hole.until - t) / life);
+    ctx.strokeStyle = 'rgba(0, 255, 204, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, r * 2.32, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}

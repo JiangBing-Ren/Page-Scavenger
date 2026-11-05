@@ -84,6 +84,7 @@ scripts/                ← 构建、图标、测试；不放运行时逻辑
    - `click` 类接 `onPointerDown` 分支
    - `hold` 类用 `state.firing` + 渲染循环里按冷却触发
    - `drag` 类走现有贯穿路径
+   - `drop` 类在 `onPointerDown` 放下实体，再在渲染循环里逐帧结算（参考黑洞 `placeBlackhole` / `stepBlackholes`）
 3. 表现放 `render.js` / `fragments.js`，不要写进宿主
 4. 音效在武器分支播开火音，命中音放 `holeDestroy` 里按 `CONFIG.weapon` 分支
 5. 测试：`test.mjs` 的武器框架项会校验字段完整性；自检钩子 `__levelSetWeapon` / `__levelWeaponInput` 可用

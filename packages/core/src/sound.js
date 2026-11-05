@@ -324,7 +324,89 @@ export function createSound(getConfig, assets) {
       });
       click(ctx, 0.28 * vol, 4200, 0.02, 4);
     },
+
+    // 黑洞：生成，低频下坠 + 空气被抽走
+    blackholeOpen(ctx, vol) {
+      tone(ctx, 0.5 * vol, 'sine', 150, 34, 0.8, 0.02);
+      swept(ctx, 0.22 * vol, 'lowpass', 1400, 180, 0.9, 0.7, 0.05);
+    },
+
+    // 黑洞：持续嗡鸣。实际播放走 startHum，这里只做 1.2 秒版本给配置器试听
+    blackholeHum(ctx, vol) {
+      tone(ctx, 0.12 * vol, 'sine', 58, 52, 1.2, 0.12);
+      tone(ctx, 0.06 * vol, 'triangle', 87, 79, 1.2, 0.12);
+      swept(ctx, 0.05 * vol, 'lowpass', 520, 260, 0.8, 1.2, 0.15);
+    },
+
+    // 黑洞：吞噬，短促下坠
+    blackholeEat(ctx, vol) {
+      tone(ctx, 0.16 * vol, 'sine', 620, 90, 0.16, 0.004);
+      click(ctx, 0.1 * vol, 1200, 0.05, 1.8);
+    },
   };
+
+  // 黑洞嗡鸣：存活期间一直响，收起时淡出。不走 play()，因为需要持续音
+  let hum = null;
+
+  function startHum() {
+    if (hum) return;
+    const vol = level('blackholeHum');
+    if (vol <= 0.002) return;
+    const ctx = ready();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.0001, t);
+    master.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.14 * vol), t + 0.25);
+    master.connect(ctx.destination);
+
+    const low = ctx.createOscillator();
+    low.type = 'sine';
+    low.frequency.setValueAtTime(62, t);
+    low.frequency.linearRampToValueAtTime(46, t + 2.4);
+
+    const mid = ctx.createOscillator();
+    mid.type = 'triangle';
+    mid.frequency.setValueAtTime(93, t);
+    mid.frequency.linearRampToValueAtTime(69, t + 2.4);
+
+    const air = ctx.createBufferSource();
+    air.buffer = noise(ctx);
+    air.loop = true;
+    const airFilter = ctx.createBiquadFilter();
+    airFilter.type = 'lowpass';
+    airFilter.frequency.setValueAtTime(700, t);
+    airFilter.frequency.linearRampToValueAtTime(260, t + 2.4);
+    const airGain = ctx.createGain();
+    airGain.gain.value = 0.12;
+
+    low.connect(master);
+    mid.connect(master);
+    air.connect(airFilter).connect(airGain).connect(master);
+
+    low.start(t);
+    mid.start(t);
+    air.start(t);
+    hum = { ctx, master, nodes: [low, mid, air] };
+  }
+
+  function stopHum() {
+    if (!hum) return;
+    const { ctx, master, nodes } = hum;
+    hum = null;
+    const t = ctx.currentTime;
+    try {
+      master.gain.cancelScheduledValues(t);
+      master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), t);
+      master.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      nodes.forEach((node) => {
+        try {
+          node.stop(t + 0.35);
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
 
   function play(name) {
     if (!enabled()) return false;
@@ -350,5 +432,5 @@ export function createSound(getConfig, assets) {
     return true;
   }
 
-  return { play, unlock: ready, voices: Object.keys(VOICES) };
+  return { play, unlock: ready, startHum, stopHum, voices: Object.keys(VOICES) };
 }

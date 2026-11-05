@@ -131,7 +131,7 @@ export const SAMPLE_ASSETS = {
 | `click` | `onPointerDown` 分支，参考左轮 / 炮 |
 | `hold` | `state.firing` + 渲染循环里按冷却触发，参考机枪 |
 | `drag` | 现有贯穿路径，通常只需在命中处按武器分支 |
-| `drop` | 需要自己加「放置 → 延时生效」的状态 |
+| `drop` | 在 pointerdown 放下实体，再用渲染循环逐帧结算，参考黑洞 `placeBlackhole` / `stepBlackholes` |
 
 ### 6.3 表现与音效
 

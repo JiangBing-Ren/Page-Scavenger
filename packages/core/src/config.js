@@ -68,6 +68,10 @@ export const DEFAULT_CONFIG = {
   machinegunHoleRadius: 18,
   machinegunCooldown: 90,
   machinegunSpread: 12,
+  // 黑洞：点击放置，存活期间持续吸入半径内的元素
+  blackholeRadius: 150,
+  blackholeDurationMs: 2400,
+  blackholeCooldown: 700,
   // 武器视效开关
   muzzleFlashEnabled: true,
   shellCasingsEnabled: true,
@@ -82,6 +86,9 @@ export const DEFAULT_CONFIG = {
   sfxRevolverHit: 1,
   sfxMachinegunFire: 1,
   sfxMachinegunHit: 1,
+  sfxBlackholeOpen: 1,
+  sfxBlackholeHum: 1,
+  sfxBlackholeEat: 1,
   sfxReload: 1,
   sfxShellDrop: 1,
 };

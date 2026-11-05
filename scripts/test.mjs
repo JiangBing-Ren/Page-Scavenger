@@ -551,13 +551,22 @@ await check('每种武器字段完整、输入方式合法', () => {
   }
 });
 
-await check('框架阶段已实现：刀、炮、左轮、机枪', () => {
+await check('框架阶段已实现：刀、炮、左轮、机枪、黑洞', () => {
   assert.deepEqual(
     implementedWeapons().map((w) => w.id),
-    ['blade', 'cannon', 'revolver', 'machinegun']
+    ['blade', 'cannon', 'revolver', 'machinegun', 'blackhole']
   );  assert.equal(getWeapon('blackhole').id, 'blackhole');
   assert.equal(getWeapon('nope'), null);
   assert.equal(DEFAULT_CONFIG.weapon, 'blade');
+});
+
+await check('黑洞是 drop 类、按面积计分、参数为正', () => {
+  const bh = getWeapon('blackhole');
+  assert.equal(bh.input, 'drop');
+  assert.equal(bh.scoring, 'area');
+  assert.ok(DEFAULT_CONFIG.blackholeRadius > 0);
+  assert.ok(DEFAULT_CONFIG.blackholeDurationMs >= 300);
+  assert.ok(DEFAULT_CONFIG.blackholeCooldown >= 0);
 });
 
 await check('爆破采样点：圆心 + 一圈环点', () => {
