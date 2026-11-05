@@ -287,7 +287,9 @@ function createWindow() {
                 ' const badMasks = masked.filter((n) => (n.style.maskImage || "").indexOf("NaN") >= 0).length;' +
                 ' const hud = document.getElementById("cleaner-hud");' +
                 ' const q = (k) => (hud ? hud.querySelector("[data-k=" + k + "]").textContent : "n/a");' +
-                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes, badMasks });' +
+                ' const dbg = window.__levelDebug ? window.__levelDebug() : null;' +
+                ' const shells = dbg && dbg.engine ? dbg.engine.shells : "n/a";' +
+                ' return JSON.stringify({ score: q("score"), combo: q("combo"), remain: q("remain"), frags: frags.length, holes, badMasks, shells });' +
                 '})()'
             );
 

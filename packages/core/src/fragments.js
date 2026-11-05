@@ -59,19 +59,19 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
 
 // 左轮抛壳：小铜壳向右上弹出后掉落
 export function spawnShell(particles, x, y) {
-  // 抛壳口在枪身：光标左下方；速度要够才看得清
-  const ox = x - 26 - Math.random() * 8;
-  const oy = y + 16 + Math.random() * 6;
+  // 抛壳口在枪身：光标左下方；尺寸与初速都要够才看得见
+  const ox = x - 30 - Math.random() * 10;
+  const oy = y + 14 + Math.random() * 8;
 
   particles.push({
     x: ox,
     y: oy,
-    vx: 3.5 + Math.random() * 3.5,
-    vy: -7 - Math.random() * 4,
-    size: 6 + Math.random() * 3,
-    color: 'rgba(232, 190, 96, 0.95)',
+    vx: 4 + Math.random() * 4,
+    vy: -9 - Math.random() * 4,
+    size: 11 + Math.random() * 4,
+    color: 'rgba(248, 206, 96, 1)',
     life: 1,
-    decay: 0.009,
+    decay: 0.006,
     spin: Math.random() * Math.PI,
     isShell: true,
   });
@@ -221,7 +221,7 @@ export function spawnBlastCracks(el, rect, centerX, centerY, options) {
 
   if (!crackPolys.length) return false;
 
-  const build = makeBuilder(el, rect, box, oversized, 'brightness(3.2) contrast(1.6) saturate(0.8)');
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(1.5) contrast(1.45)');
   const node = build(full);
 
   // 每次显形都重建遮罩：外框 + 洞 + 已长出的裂缝
@@ -903,12 +903,16 @@ export function spawnMultiCutFragments(el, rect, cuts, hitStop) {
     vx /= dist;
     vy /= dist;
 
+    // 先让切口露出一道细缝，停一拍再飞散（次元斩的“切开→炸开”节奏）
+    node.style.transition = 'transform 0.12s ease-out';
+    node.style.transform = `translate3d(${vx * 2}px, ${vy * 2}px, 0)`;
+
     animate(node, {
       nx: vx,
       speedX: 110 + Math.random() * 130,
       rot: (Math.random() - 0.5) * 120,
       axis: Math.random() > 0.5 ? 1 : -1,
-      hitStop: hitStop + depth * 45,
+      hitStop: hitStop + 150 + depth * 45,
     });
   }
 

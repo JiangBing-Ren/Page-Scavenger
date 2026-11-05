@@ -338,7 +338,11 @@ export function updateParticles(ctx, state) {
     } else if (p.isShell) {
       ctx.translate(p.x, p.y);
       ctx.rotate(p.spin || 0);
+      ctx.fillStyle = p.color;
       ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+      // 顶部高光，避免小铜块糊成一团
+      ctx.fillStyle = 'rgba(255, 250, 224, 0.95)';
+      ctx.fillRect(-p.size / 2 + 1, -p.size / 4, p.size * 0.55, 1.6);
     } else if (p.isChunk) {
       ctx.translate(p.x, p.y);
       ctx.rotate(p.x * 0.05);
@@ -425,20 +429,55 @@ export function drawMuzzleFlash(ctx, state) {
   ctx.save();
   ctx.globalAlpha = k;
 
-  // 侧视锥形枪焰：从枪口朝射击方向张开
+  // 外层橙焰：宽而短
+  const outerLen = len * (0.85 + Math.random() * 0.4);
   ctx.beginPath();
-  ctx.moveTo(f.x + nx * halfBase * 0.5, f.y + ny * halfBase * 0.5);
-  ctx.lineTo(f.x + dx * len, f.y + dy * len);
-  ctx.lineTo(f.x - nx * halfBase * 0.5, f.y - ny * halfBase * 0.5);
-  ctx.lineTo(f.x - dx * 6, f.y - dy * 6);
+  ctx.moveTo(f.x + nx * halfBase, f.y + ny * halfBase);
+  ctx.quadraticCurveTo(
+    f.x + dx * outerLen * 0.6 + nx * halfBase * 1.6,
+    f.y + dy * outerLen * 0.6 + ny * halfBase * 1.6,
+    f.x + dx * outerLen,
+    f.y + dy * outerLen
+  );
+  ctx.quadraticCurveTo(
+    f.x + dx * outerLen * 0.6 - nx * halfBase * 1.6,
+    f.y + dy * outerLen * 0.6 - ny * halfBase * 1.6,
+    f.x - nx * halfBase,
+    f.y - ny * halfBase
+  );
   ctx.closePath();
-
-  const g = ctx.createLinearGradient(f.x, f.y, f.x + dx * len, f.y + dy * len);
-  g.addColorStop(0, 'rgba(255, 252, 230, 0.95)');
-  g.addColorStop(0.5, 'rgba(255, 200, 90, 0.7)');
-  g.addColorStop(1, 'rgba(255, 130, 30, 0)');
-  ctx.fillStyle = g;
+  const outer = ctx.createLinearGradient(f.x, f.y, f.x + dx * outerLen, f.y + dy * outerLen);
+  outer.addColorStop(0, 'rgba(255, 210, 120, 0.95)');
+  outer.addColorStop(0.45, 'rgba(255, 150, 40, 0.75)');
+  outer.addColorStop(1, 'rgba(255, 90, 20, 0)');
+  ctx.fillStyle = outer;
   ctx.fill();
+
+  // 内层白焰：窄而亮
+  const innerLen = outerLen * 0.62;
+  ctx.beginPath();
+  ctx.moveTo(f.x + nx * halfBase * 0.42, f.y + ny * halfBase * 0.42);
+  ctx.lineTo(f.x + dx * innerLen + nx * halfBase * 0.15, f.y + dy * innerLen + ny * halfBase * 0.15);
+  ctx.lineTo(f.x + dx * innerLen - nx * halfBase * 0.15, f.y + dy * innerLen - ny * halfBase * 0.15);
+  ctx.lineTo(f.x - nx * halfBase * 0.42, f.y - ny * halfBase * 0.42);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255, 252, 232, 0.92)';
+  ctx.fill();
+
+  // 乱窜的火舌
+  for (let i = 0; i < 3; i++) {
+    const spread = (Math.random() - 0.5) * 0.9;
+    const sx = Math.cos(spread);
+    const sy = Math.sin(spread);
+    const spikeLen = 10 + Math.random() * 14;
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y);
+    ctx.lineTo(f.x + (dx * sx - dy * sy) * spikeLen, f.y + (dy * sx + dx * sy) * spikeLen);
+    ctx.lineTo(f.x + dx * 4, f.y + dy * 4);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255, 190, 90, 0.7)';
+    ctx.fill();
+  }
 
   // 枪口处的小亮核
   ctx.beginPath();

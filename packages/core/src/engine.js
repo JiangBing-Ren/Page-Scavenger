@@ -1310,6 +1310,7 @@ export function createCleaner(options) {
       drawing: state.isDrawing,
       weapon: CONFIG.weapon,
       chambers: state.chambers,
+      shells: state.particles.filter((p) => p.isShell).length,
       activeHits: state.activeHits.size,
       locked: state.lockedTargets.size,
       cuts: Array.from(state.lockedTargets.values()).map((r) => (r.cuts ? r.cuts.length : 0)),
