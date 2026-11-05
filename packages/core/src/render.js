@@ -414,17 +414,38 @@ export function drawMuzzleFlash(ctx, state) {
   }
 
   const k = Math.min(1, left / 70);
+  const dx = Number.isFinite(f.dx) ? f.dx : 1;
+  const dy = Number.isFinite(f.dy) ? f.dy : 0;
+  const nx = -dy;
+  const ny = dx;
+
+  const len = 34;
+  const halfBase = 9;
 
   ctx.save();
   ctx.globalAlpha = k;
-  const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 18);
-  g.addColorStop(0, 'rgba(255, 250, 220, 0.95)');
-  g.addColorStop(0.45, 'rgba(255, 200, 90, 0.6)');
-  g.addColorStop(1, 'rgba(255, 140, 40, 0)');
-  ctx.fillStyle = g;
+
+  // 侧视锥形枪焰：从枪口朝射击方向张开
   ctx.beginPath();
-  ctx.arc(f.x, f.y, 18, 0, Math.PI * 2);
+  ctx.moveTo(f.x + nx * halfBase * 0.5, f.y + ny * halfBase * 0.5);
+  ctx.lineTo(f.x + dx * len, f.y + dy * len);
+  ctx.lineTo(f.x - nx * halfBase * 0.5, f.y - ny * halfBase * 0.5);
+  ctx.lineTo(f.x - dx * 6, f.y - dy * 6);
+  ctx.closePath();
+
+  const g = ctx.createLinearGradient(f.x, f.y, f.x + dx * len, f.y + dy * len);
+  g.addColorStop(0, 'rgba(255, 252, 230, 0.95)');
+  g.addColorStop(0.5, 'rgba(255, 200, 90, 0.7)');
+  g.addColorStop(1, 'rgba(255, 130, 30, 0)');
+  ctx.fillStyle = g;
   ctx.fill();
+
+  // 枪口处的小亮核
+  ctx.beginPath();
+  ctx.arc(f.x, f.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 245, 210, 0.9)';
+  ctx.fill();
+
   ctx.restore();
 }
 

@@ -6,6 +6,7 @@ import {
   spawnDOMFragments,
   spawnMultiCutFragments,
   spawnBlastHole,
+  spawnBlastCracks,
   spawnBlastBreakup,
   spawnSmoke,
   spawnShell,
@@ -294,9 +295,16 @@ export function createCleaner(options) {
     sound.play('machinegunFire');
     state.shake = Math.max(state.shake, 0.22);
 
-    // 机枪枪口火光
+    // 机枪枪口火光：记录方向，绘制时按侧视画成锥形
     if (CONFIG.muzzleFlashEnabled !== false) {
-      state.muzzleFlash = { x: muzzle.x, y: muzzle.y, until: now() + 70 };
+      const len = Math.hypot(dx, dy) || 1;
+      state.muzzleFlash = {
+        x: muzzle.x,
+        y: muzzle.y,
+        dx: dx / len,
+        dy: dy / len,
+        until: now() + 70,
+      };
     }
 
     if (hitTarget) {
@@ -478,18 +486,29 @@ export function createCleaner(options) {
       const hole = Math.min(holeRadius, Math.max(rect.width, rect.height) * 0.75);
 
       if (options && options.breakup) {
-        // 炮：切成多块后由慢到快崩开
-        const ok = spawnBlastBreakup(el, rect, cx, cy, {
+        // 炮：裂缝先不规则生长（带转折与分叉），长完再碎块崩开
+        const started = spawnBlastCracks(el, rect, cx, cy, {
           holeRadius: hole,
           hitStop: CONFIG.hitStop,
-          stepBase: Math.max(60, CONFIG.cutStepBase * 0.65),
+          stepBase: Math.max(70, CONFIG.cutStepBase * 0.7),
           stepDecay: CONFIG.cutStepDecay,
           stepMin: CONFIG.cutStepMin,
-          onCrack: (n) => sound.play('bladeCut'),
-          onBurst: () => sound.play('cannonBreak'),
+          onCrack: () => sound.play('cannonCrack'),
+          onDone: () => {
+            const ok = spawnBlastBreakup(el, rect, cx, cy, {
+              holeRadius: hole,
+              hitStop: 0,
+              stepBase: Math.max(50, CONFIG.cutStepBase * 0.5),
+              stepDecay: CONFIG.cutStepDecay,
+              stepMin: 30,
+              onCrack: () => sound.play('cannonCrack'),
+              onBurst: () => sound.play('cannonBreak'),
+            });
+            if (!ok) sound.play('cannonBreak');
+          },
         });
 
-        if (!ok) {
+        if (!started) {
           spawnBlastHole(el, rect, cx, cy, {
             holeRadius: hole,
             hitStop: CONFIG.hitStop,

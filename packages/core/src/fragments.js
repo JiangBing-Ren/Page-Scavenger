@@ -59,15 +59,19 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
 
 // 左轮抛壳：小铜壳向右上弹出后掉落
 export function spawnShell(particles, x, y) {
+  // 抛壳口在枪身：光标左下方；速度要够才看得清
+  const ox = x - 26 - Math.random() * 8;
+  const oy = y + 16 + Math.random() * 6;
+
   particles.push({
-    x,
-    y,
-    vx: 2 + Math.random() * 3,
-    vy: -6 - Math.random() * 4,
-    size: 4 + Math.random() * 2,
-    color: 'rgba(226, 184, 92, 0.95)',
+    x: ox,
+    y: oy,
+    vx: 3.5 + Math.random() * 3.5,
+    vy: -7 - Math.random() * 4,
+    size: 6 + Math.random() * 3,
+    color: 'rgba(232, 190, 96, 0.95)',
     life: 1,
-    decay: 0.012,
+    decay: 0.009,
     spin: Math.random() * Math.PI,
     isShell: true,
   });
@@ -91,6 +95,177 @@ export function spawnSmoke(particles, cx, cy, radius) {
       isSmoke: true,
     });
   }
+}
+
+// 炮击第一阶段：裂缝从弹着点不规则生长（带转折与分叉），按下标逐段显形；
+// 生长结束后交给 onDone，由调用方接着做碎块崩开。
+export function spawnBlastCracks(el, rect, centerX, centerY, options) {
+  const opts = options || {};
+  const hitStop = Number.isFinite(opts.hitStop) ? opts.hitStop : 0;
+  const stepBase = Number.isFinite(opts.stepBase) ? opts.stepBase : 110;
+  const stepDecay = Number.isFinite(opts.stepDecay) ? opts.stepDecay : 0.75;
+  const stepMin = Number.isFinite(opts.stepMin) ? opts.stepMin : 40;
+
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) box = visibleBox(rect);
+  if (box.width < 4 || box.height < 4) return false;
+
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  const lx = clamp(centerX - box.left, 0, box.width);
+  const ly = clamp(centerY - box.top, 0, box.height);
+  const r = Math.max(10, Number(opts.holeRadius) || 60);
+
+  const full = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ];
+
+  const oriented = (points) => ensureWinding(points, true);
+  const toSubpath = (points) =>
+    'M' + points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') + ' Z';
+
+  // 弹着点的锯齿洞
+  const holePoints = [];
+  const segs = 16;
+  for (let i = 0; i < segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const jitter = 0.68 + Math.random() * 0.62;
+    holePoints.push({
+      x: lx + Math.cos(a) * r * jitter,
+      y: ly + Math.sin(a) * r * jitter,
+    });
+  }
+  const holePath = toSubpath(oriented(holePoints));
+
+  // 折线加宽成 ribbon
+  const toRibbon = (points, widths) => {
+    const left = [];
+    const right = [];
+    for (let i = 0; i < points.length; i++) {
+      const prev = points[i - 1] || points[i];
+      const next = points[i + 1] || points[i];
+      let dx = next.x - prev.x;
+      let dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const half = Math.max(0.6, widths[i] / 2);
+      left.push({ x: points[i].x + nx * half, y: points[i].y + ny * half });
+      right.push({ x: points[i].x - nx * half, y: points[i].y - ny * half });
+    }
+    return [...left, ...right.reverse()];
+  };
+
+  // 递归生成裂缝（随机转折 + 分叉），按生成顺序排队
+  const crackPolys = [];
+  const grow = (origin, angle, length, width, depth) => {
+    const steps = 4 + Math.floor(Math.random() * 3);
+    const points = [origin];
+    const stepLen = length / steps;
+    const curvature = (Math.random() - 0.5) * 1.5;
+    const jitter = 0.25 + Math.random() * 0.5;
+
+    let a = angle;
+    let x = origin.x;
+    let y = origin.y;
+
+    for (let i = 0; i < steps; i++) {
+      a += curvature / steps + (Math.random() - 0.5) * jitter;
+      x += Math.cos(a) * stepLen;
+      y += Math.sin(a) * stepLen;
+      points.push({ x, y });
+    }
+
+    const taper = 0.6 + Math.random();
+    const widths = points.map((_, i) => {
+      const t = i / (points.length - 1);
+      return Math.max(1, width * Math.pow(1 - t, taper));
+    });
+
+    crackPolys.push(oriented(toRibbon(points, widths)));
+
+    if (depth <= 0) return;
+
+    const branches = Math.random() > 0.45 ? 2 : 1;
+    for (let b = 0; b < branches; b++) {
+      const idx = 1 + Math.floor(Math.random() * Math.max(1, points.length - 2));
+      const p = points[idx];
+      const side = Math.random() > 0.5 ? 1 : -1;
+      grow(
+        p,
+        a + side * (0.5 + Math.random() * 0.6),
+        length * (0.3 + Math.random() * 0.3),
+        widths[idx] * 0.65,
+        depth - 1
+      );
+    }
+  };
+
+  const mains = 3 + Math.floor(Math.random() * 2); // 3~4 条主线
+  const baseAngle = Math.random() * Math.PI * 2;
+  for (let i = 0; i < mains; i++) {
+    const angle = baseAngle + (i / mains) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
+    const startR = r * (0.7 + Math.random() * 0.2);
+    grow(
+      { x: lx + Math.cos(angle) * startR, y: ly + Math.sin(angle) * startR },
+      angle,
+      r * (0.9 + Math.random() * 1.3),
+      Math.max(4, r * 0.16),
+      1
+    );
+  }
+
+  if (!crackPolys.length) return false;
+
+  const build = makeBuilder(el, rect, box, oversized, 'brightness(3.2) contrast(1.6) saturate(0.8)');
+  const node = build(full);
+
+  // 每次显形都重建遮罩：外框 + 洞 + 已长出的裂缝
+  const applyMask = (count) => {
+    const path =
+      `M0 0 H${box.width.toFixed(1)} V${box.height.toFixed(1)} H0 Z ${holePath} ` +
+      crackPolys.slice(0, count).map(toSubpath).join(' ');
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
+      `<path d="${path}" fill="#fff"/></svg>`;
+    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    node.style.maskImage = url;
+    node.style.webkitMaskImage = url;
+    node.style.maskRepeat = 'no-repeat';
+    node.style.maskSize = '100% 100%';
+  };
+
+  applyMask(1);
+
+  // 命中瞬间亮一下
+  node.style.transition = 'filter 0.2s ease-out';
+  setTimeout(() => {
+    node.style.filter = 'none';
+  }, 70);
+
+  // 由慢到快逐段长出裂缝
+  let delay = hitStop + 60;
+  const perStage = Math.max(1, Math.ceil(crackPolys.length / 5));
+
+  for (let i = perStage; i <= crackPolys.length; i += perStage) {
+    const at = delay;
+    setTimeout(() => {
+      applyMask(i);
+      if (typeof opts.onCrack === 'function') opts.onCrack();
+    }, at);
+    delay += Math.max(stepMin, stepBase * Math.pow(stepDecay, i / perStage));
+  }
+
+  setTimeout(() => {
+    if (node.parentNode) node.parentNode.removeChild(node);
+    if (typeof opts.onDone === 'function') opts.onDone();
+  }, delay + 80);
+
+  return true;
 }
 
 // 炮击：从弹着点切出多条贯穿到边缘的裂缝，把目标碎成多块，
