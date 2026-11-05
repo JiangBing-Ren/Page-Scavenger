@@ -44,7 +44,7 @@ export const DEFAULT_CONFIG = {
   cutStepBase: 170,
   cutStepDecay: 0.72,
   cutStepMin: 45,
-  // 当前武器（见 weapons.js）。目前 blade / cannon 已实现
+  // 当前武器（见 weapons.js）。目前 blade / cannon / revolver / machinegun 已实现
   weapon: 'blade',
   // 炮：爆破半径与两次开火的最小间隔
   cannonRadius: 140,
