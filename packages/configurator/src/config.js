@@ -67,6 +67,7 @@ const ADV_FIELDS = [
   { key: 'sfxMachinegunFire', label: '机枪 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxMachinegunHit', label: '机枪 · 弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   { key: 'sfxReload', label: '左轮 · 换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
+  { key: 'sfxShellDrop', label: '左轮 · 弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
   // 多刀蓄力
   { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
   { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },

@@ -82,6 +82,7 @@ export const DEFAULT_CONFIG = {
   sfxMachinegunFire: 1,
   sfxMachinegunHit: 1,
   sfxReload: 1,
+  sfxShellDrop: 1,
 };
 
 export const BASE_SELECTORS = [

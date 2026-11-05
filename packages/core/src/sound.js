@@ -184,6 +184,12 @@ export function createSound(getConfig) {
       setTimeout(() => click(ctx, 0.34 * vol, 1500, 0.07, 2.2), 130);
       setTimeout(() => tone(ctx, 0.16 * vol, 'square', 240, 80, 0.3, 0.01), 20);
     },
+
+    // 弹壳落地：清脆的金属弹跳声
+    shellDrop(ctx, vol) {
+      click(ctx, 0.3 * vol, 3000, 0.045, 3.2);
+      tone(ctx, 0.06 * vol, 'triangle', 2400, 1600, 0.07, 0.003);
+    },
   };
 
   function play(name) {

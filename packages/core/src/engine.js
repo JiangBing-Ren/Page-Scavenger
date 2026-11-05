@@ -347,9 +347,9 @@ export function createCleaner(options) {
     state.shake = 0.6;
     state.shockwaves.push({ x, y, r: 10, alpha: 0.8 });
 
-    // 抛壳
+    // 抛壳：尺寸跟弹孔一致
     if (CONFIG.shellCasingsEnabled !== false) {
-      spawnShell(state.particles, x, y);
+      spawnShell(state.particles, x, y, CONFIG.revolverHoleRadius);
     }
 
     // 消耗一发；打空后进入换弹
@@ -946,7 +946,7 @@ export function createCleaner(options) {
     drawTargetBoxes(ctx, state);
     drawEffects(ctx, state);
     drawTrail(ctx, state, CONFIG);
-    updateParticles(ctx, state);
+    updateParticles(ctx, state, (type) => sound.play(type));
     drawFiringGuide(ctx, state);
     drawTracers(ctx, state);
     drawMuzzleFlash(ctx, state);

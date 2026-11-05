@@ -296,7 +296,7 @@ export function drawTrail(ctx, state, config) {
   ctx.restore();
 }
 
-export function updateParticles(ctx, state) {
+export function updateParticles(ctx, state, onEvent) {
   for (let i = state.particles.length - 1; i >= 0; i--) {
     const p = state.particles[i];
     p.x += p.vx;
@@ -309,11 +309,27 @@ export function updateParticles(ctx, state) {
       p.life -= p.decay;
       p.size += 0.16;
     } else if (p.isShell) {
-      // 弹壳：抛物线飞出、翻滚
+      // 弹壳：抛物线飞出、翻滚，落地后弹跳
       p.vy += 0.9;
       p.vx *= 0.995;
       p.spin = (p.spin || 0) + 0.3;
       p.life -= p.decay;
+
+      const ground = window.innerHeight - 18;
+      if (p.y > ground && p.vy > 0) {
+        p.y = ground;
+        p.vy = -Math.abs(p.vy) * 0.45;
+        p.vx *= 0.65;
+        p.bounces = (p.bounces || 0) + 1;
+
+        if (p.bounces <= 3 && typeof onEvent === 'function') onEvent('shellDrop');
+
+        if (Math.abs(p.vy) < 1.4) {
+          p.vy = 0;
+          p.vx *= 0.4;
+          p.decay = p.decay * 2.5;
+        }
+      }
     } else {
       p.vy += p.isChunk ? 1.2 : 0.8;
       p.vx *= 0.96;

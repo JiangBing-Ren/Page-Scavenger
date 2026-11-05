@@ -58,20 +58,21 @@ export function spawnSparks(particles, rect, hitPoint, dir) {
 }
 
 // 左轮抛壳：小铜壳向右上弹出后掉落
-export function spawnShell(particles, x, y) {
-  // 抛壳口在枪身：光标左下方；尺寸与初速都要够才看得见
+export function spawnShell(particles, x, y, size) {
+  // 抛壳口在枪身：光标左下方；尺寸跟弹孔一致，才看得清
   const ox = x - 30 - Math.random() * 10;
   const oy = y + 14 + Math.random() * 8;
+  const len = Math.max(12, Number(size) || 34);
 
   particles.push({
     x: ox,
     y: oy,
     vx: 4 + Math.random() * 4,
     vy: -9 - Math.random() * 4,
-    size: 11 + Math.random() * 4,
+    size: len,
     color: 'rgba(248, 206, 96, 1)',
     life: 1,
-    decay: 0.006,
+    decay: 0.0045,
     spin: Math.random() * Math.PI,
     isShell: true,
   });
