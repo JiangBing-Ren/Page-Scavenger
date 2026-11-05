@@ -19,9 +19,9 @@ const BASIC_FIELDS = [
   { key: 'targetSizeLevel', label: '尺寸挡位', type: 'select', options: SIZE_LEVELS, labels: SIZE_LABELS },
   { key: 'hitStop', label: '顿感强度', type: 'select', options: HIT_STOPS, labels: HIT_STOP_LABELS, suffix: 'ms' },
   { key: 'executeOnRelease', label: '长按模式', type: 'toggle', hint: '按住可对同一目标反复叠刀；黑洞按住时跟随光标' },
-  { key: 'comboCut', label: '连切碎片', type: 'toggle', hint: '切下来的碎片可再次切开' },
+  { key: 'comboCut', label: '连切碎片（刀）', type: 'toggle', hint: '只有刀切下的碎片能再次切开，炮/黑洞/枪械的碎块不可再切' },
   { key: 'allowOversize', label: '允许超大容器', type: 'toggle', hint: '碎片按可见区域裁剪' },
-  { key: 'forceMode', label: '自由切割', type: 'toggle', hint: '不限于广告选择器' },
+  { key: 'forceMode', label: '自由模式', type: 'toggle', hint: '不限于广告选择器，任意元素都能切' },
   { key: 'soundEnabled', label: '音效', type: 'toggle' },
   { key: 'soundVolume', label: '音量', type: 'range', min: 0, max: 1, step: 0.05 },
   { key: 'autoApplyMarks', label: '刷新后自动清理', type: 'toggle', hint: '记住切过的元素并自动隐藏' },
@@ -61,7 +61,7 @@ const ADV_FIELDS = [
   { key: 'blackholeFieldRatio', label: '黑洞 · 引力场', type: 'range', min: 0.1, max: 1, step: 0.05, suffix: '×R', group: 'weapon' },
   { key: 'blackholeCaptureRatio', label: '黑洞 · 可吸面积比', type: 'range', min: 1, max: 3, step: 0.05, group: 'weapon' },
   { key: 'blackholeTearRatio', label: '黑洞 · 撕裂阈值', type: 'range', min: 0.3, max: 1.3, step: 0.05, group: 'weapon' },
-  { key: 'blackholeGrowEfficiency', label: '黑洞 · 成长效率', type: 'range', min: 0, max: 0.6, step: 0.01, group: 'weapon' },
+  { key: 'blackholeGrowEfficiency', label: '黑洞 · 成长效率', type: 'range', min: 0, max: 0.2, step: 0.005, group: 'weapon' },
   { key: 'blackholeMaxAreaRatio', label: '黑洞 · 面积上限', type: 'range', min: 0.1, max: 1, step: 0.01, group: 'weapon' },
 
   // 音效（逐个可调，便于对比差异）

@@ -12,6 +12,7 @@ import {
   spawnShell,
   reslicePiece,
   spawnDevourFragments,
+  spawnTornDevour,
 } from './fragments.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
@@ -224,6 +225,9 @@ export function createCleaner(options) {
 
   const holeAreaOf = (radius) => Math.PI * radius * radius;
 
+  // 被吞时的滤镜：比原色略亮、略去饱和，但不像炮那样洗白
+  const DEVOUR_FILTER = 'brightness(1.6) contrast(1.2) saturate(0.8)';
+
   function blackholeBaseRadius() {
     return Math.max(40, Number(CONFIG.blackholeRadius) || 150);
   }
@@ -350,15 +354,16 @@ export function createCleaner(options) {
       state.undoStack.push({ sel, prevStyle });
       if (state.undoStack.length > 20) state.undoStack.shift();
 
-      spawnDevourFragments(el, rect, hole.x, hole.y, {
-        filter: currentWeapon().hitFilter,
-        pieces,
-        axis: w >= h ? 'x' : 'y',
-      });
+      // 需要撕裂就走裂隙粉碎（以最近点为撕裂源扇形切裂）；整吞才是一整块飞进去
+      if (needTear) {
+        spawnTornDevour(el, rect, hole.x, hole.y, { filter: DEVOUR_FILTER, pieces });
+      } else {
+        spawnDevourFragments(el, rect, hole.x, hole.y, { filter: DEVOUR_FILTER, pieces: 1 });
+      }
 
       // 成长：吸入面积按效率折算进黑洞面积，上限是视口面积的比例
       const eff = Number(CONFIG.blackholeGrowEfficiency);
-      const gain = Number.isFinite(eff) ? Math.max(0, Math.min(1, eff)) : 0.15;
+      const gain = Number.isFinite(eff) ? Math.max(0, Math.min(1, eff)) : 0.01;
       const grown = Math.min(holeAreaOf(blackholeMaxRadius()), holeArea + targetArea * gain);
       hole.radius = Math.max(1, Math.sqrt(grown / Math.PI));
 

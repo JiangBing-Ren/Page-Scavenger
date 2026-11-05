@@ -78,8 +78,8 @@ export const DEFAULT_CONFIG = {
   blackholeCaptureRatio: 1.35,
   // 撕裂阈值与碎片尺寸：超过该面积比就撕碎，每块面积 = 该值 × 黑洞面积
   blackholeTearRatio: 0.7,
-  // 吸入面积折算成成长的效率
-  blackholeGrowEfficiency: 0.15,
+  // 吸入面积折算成成长的效率（0.01 ≈ 每吃一个中等目标半径涨 1px 量级）
+  blackholeGrowEfficiency: 0.01,
   // 黑洞面积上限 = 视口面积 × 该值
   blackholeMaxAreaRatio: 0.67,
   // 武器视效开关

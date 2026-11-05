@@ -634,14 +634,14 @@ export function drawBlackholes(ctx, state) {
   ctx.setLineDash([]);
 
   // 事件视界与外围空间弯曲
-  const grad = ctx.createRadialGradient(hole.x, hole.y, R * 0.2, hole.x, hole.y, R * 1.55);
+  const grad = ctx.createRadialGradient(hole.x, hole.y, R * 0.2, hole.x, hole.y, R * 1.4);
   grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-  grad.addColorStop(0.52, 'rgba(3, 5, 10, 0.97)');
-  grad.addColorStop(0.84, 'rgba(24, 18, 48, 0.55)');
+  grad.addColorStop(0.66, 'rgba(3, 5, 10, 0.98)');
+  grad.addColorStop(0.82, 'rgba(24, 18, 48, 0.32)');
   grad.addColorStop(1, 'rgba(3, 5, 10, 0)');
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R * 1.55 * pulse, 0, Math.PI * 2);
+  ctx.arc(hole.x, hole.y, R * 1.4 * pulse, 0, Math.PI * 2);
   ctx.fill();
 
   // 吸积盘：三层反向旋转的弧

@@ -141,7 +141,7 @@ function injectUI() {
       };
 
       addItem(cleaner.isActive() ? '⏹ 退出斩击模式' : '⚔️ 开启斩击模式', () => cleaner.toggle());
-      addItem(config.forceMode ? '🎯 自由切割：开启' : '🎯 自由切割：关闭', () => {
+      addItem(config.forceMode ? '🎯 自由模式：开启' : '🎯 自由模式：关闭', () => {
         cleaner.setConfig({ forceMode: !config.forceMode });
       });
 

@@ -865,6 +865,126 @@ export function spawnDevourFragments(el, rect, targetX, targetY, options) {
   return nodes.length > 0;
 }
 
+// 黑洞：牵引撕裂。以元素离洞心最近的点为撕裂源，沿牵引方向扇形切裂，
+// 每块先被扯开一道缝，再按距洞远近先后被拉进去——参考炮的裂隙粉碎，方向反过来。
+export function spawnTornDevour(el, rect, targetX, targetY, options) {
+  const opts = options || {};
+
+  const oversized = rect.width > window.innerWidth || rect.height > window.innerHeight;
+  let box = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+  if (oversized) box = visibleBox(rect);
+  if (box.width < 4 || box.height < 4) return false;
+
+  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+  // 撕裂源 = 元素上离洞心最近的点
+  const ox = clamp(targetX - box.left, 0, box.width);
+  const oy = clamp(targetY - box.top, 0, box.height);
+
+  const full = [
+    { x: 0, y: 0 },
+    { x: box.width, y: 0 },
+    { x: box.width, y: box.height },
+    { x: 0, y: box.height },
+  ];
+
+  const wantPieces = Math.max(2, Math.min(12, Math.floor(Number(opts.pieces) || 0) || 4));
+  const baseAngle = Math.atan2(targetY - (box.top + oy), targetX - (box.left + ox));
+
+  // 以牵引方向为中心扇开 cutCount 条裂纹，切出不规则碎块
+  let pieces = [{ poly: full }];
+  const cuts = wantPieces - 1;
+  for (let i = 0; i < cuts; i++) {
+    const spread = ((i + 0.5) / cuts) * 2 - 1;
+    const angle = baseAngle + spread * 1.1 + (Math.random() - 0.5) * 0.35;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const next = [];
+    for (const piece of pieces) {
+      const { left, right } = splitPolygon(piece.poly, { x: ox, y: oy }, dx, dy);
+      for (const poly of [left, right]) {
+        if (poly.length >= 3 && polygonArea(poly) >= 30) next.push({ poly });
+      }
+    }
+    pieces = next;
+  }
+
+  if (!pieces.length) return false;
+
+  const filter = opts.filter || 'brightness(2.2) contrast(1.5) saturate(0.6)';
+  const build = makeBuilder(el, rect, box, oversized, filter);
+
+  const items = pieces.map(({ poly }) => {
+    let sx = 0;
+    let sy = 0;
+    for (const p of poly) {
+      sx += p.x;
+      sy += p.y;
+    }
+    const cx = sx / poly.length;
+    const cy = sy / poly.length;
+    const node = build(poly);
+    // 绕碎块自身中心旋转，否则会绕整块元素中心乱甩
+    node.style.transformOrigin = `${cx.toFixed(1)}px ${cy.toFixed(1)}px`;
+    return { node, cx: box.left + cx, cy: box.top + cy };
+  });
+
+  // 近的先被拉走、远的慢半拍，读起来才像被牵引而不是整体平移
+  const sourceX = box.left + ox;
+  const sourceY = box.top + oy;
+  const distToSource = (item) => Math.hypot(item.cx - sourceX, item.cy - sourceY);
+  items.sort((a, b) => distToSource(a) - distToSource(b));
+
+  items.forEach((item, index) => {
+    const dx = targetX - item.cx;
+    const dy = targetY - item.cy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const pop = 3 + Math.random() * 5;
+    const popX = -(dx / dist) * pop;
+    const popY = -(dy / dist) * pop;
+    const spin = (Math.random() < 0.5 ? -1 : 1) * (120 + Math.random() * 200);
+    const duration = Math.max(260, Math.min(900, dist * 0.9 + 260));
+    const delay = Math.min(300, index * 26 + dist * 0.08);
+
+    try {
+      item.node.animate(
+        [
+          { transform: 'translate3d(0,0,0) rotate(0deg) scale(1)', opacity: 1 },
+          {
+            transform: `translate3d(${popX.toFixed(1)}px, ${popY.toFixed(1)}px, 0) rotate(${(spin * 0.08).toFixed(0)}deg) scale(1)`,
+            opacity: 1,
+            offset: 0.15,
+          },
+          {
+            transform: `translate3d(${(dx * 0.62 - dy * 0.18).toFixed(1)}px, ${(dy * 0.62 + dx * 0.18).toFixed(1)}px, 0) rotate(${(spin * 0.55).toFixed(0)}deg) scale(0.5)`,
+            opacity: 0.9,
+            offset: 0.62,
+          },
+          {
+            transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${spin.toFixed(0)}deg) scale(0.06)`,
+            opacity: 0,
+          },
+        ],
+        {
+          duration,
+          delay,
+          easing: 'cubic-bezier(0.35, 0.02, 0.7, 0.45)',
+          fill: 'forwards',
+        }
+      );
+    } catch (e) {
+      item.node.style.transition = `transform ${duration}ms ease-in, opacity ${duration}ms ease-in`;
+      item.node.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.06) rotate(${spin}deg)`;
+      item.node.style.opacity = '0';
+    }
+
+    setTimeout(() => {
+      if (item.node.parentNode) item.node.parentNode.removeChild(item.node);
+    }, delay + duration + 40);
+  });
+
+  return items.length > 0;
+}
+
 export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {
   if (!entryPoint) return;
 
