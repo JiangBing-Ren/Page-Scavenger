@@ -216,6 +216,22 @@ function fieldRow(field) {
     row.dataset.kind = 'range';
   }
 
+  // 音效项加一个试听按钮，避免靠猜
+  if (field.key.indexOf('sfx') === 0) {
+    const playBtn = document.createElement('button');
+    playBtn.type = 'button';
+    playBtn.className = 'reset-field';
+    playBtn.title = '试听';
+    playBtn.textContent = '▶';
+    playBtn.addEventListener('click', () => {
+      const raw = field.key.slice(3);
+      const voice = raw.charAt(0).toLowerCase() + raw.slice(1);
+      ensureCleaner().setConfig({ ...draft });
+      ensureCleaner().playSfx(voice);
+    });
+    control.appendChild(playBtn);
+  }
+
   const resetBtn = document.createElement('button');
   resetBtn.type = 'button';
   resetBtn.className = 'reset-field';

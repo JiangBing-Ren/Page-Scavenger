@@ -180,15 +180,15 @@ export function createSound(getConfig) {
 
     // 换弹：两声金属咔哒 + 弹仓旋转
     reload(ctx, vol) {
-      click(ctx, 0.42 * vol, 2400, 0.06, 2.6);
-      setTimeout(() => click(ctx, 0.34 * vol, 1500, 0.07, 2.2), 130);
-      setTimeout(() => tone(ctx, 0.16 * vol, 'square', 240, 80, 0.3, 0.01), 20);
+      click(ctx, 0.7 * vol, 2400, 0.09, 2.6);
+      setTimeout(() => click(ctx, 0.58 * vol, 1500, 0.11, 2.2), 130);
+      setTimeout(() => tone(ctx, 0.32 * vol, 'square', 240, 80, 0.34, 0.01), 20);
     },
 
     // 弹壳落地：清脆的金属弹跳声
     shellDrop(ctx, vol) {
-      click(ctx, 0.3 * vol, 3000, 0.045, 3.2);
-      tone(ctx, 0.06 * vol, 'triangle', 2400, 1600, 0.07, 0.003);
+      click(ctx, 0.6 * vol, 3000, 0.09, 3.2);
+      tone(ctx, 0.14 * vol, 'triangle', 2400, 1500, 0.12, 0.003);
     },
   };
 

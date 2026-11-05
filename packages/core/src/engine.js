@@ -1304,6 +1304,8 @@ export function createCleaner(options) {
     getWeapon: () => currentWeapon(),
     setWeapon,
     preview,
+    // 配置器试听：直接播放某个命名音效
+    playSfx: (name) => sound.play(name),
     // 调试/自检用：不参与游戏逻辑
     getDebugState: () => ({
       active: state.active,
