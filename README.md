@@ -10,6 +10,11 @@
 
 完整的使用与开发说明见 **[docs/manual.md](./docs/manual.md)**（安装、玩法、武器、计分、关卡、配置项、音效、桌面版、常见问题、架构与调试钩子）。
 
+另外两本：
+
+- **[docs/maintenance.md](./docs/maintenance.md)** —— 维护手册：发版流程、五类改动的步骤、构建与 CI 纪律、备份约定、技术债、排障索引
+- **[docs/diy.md](./docs/diy.md)** —— DIY 手册：不写代码能改什么，加音效 / 加武器 / 做关卡 / 换图标的配方，翻车现场与许可边界
+
 ## 安装
 
 ### Chromium（Chrome / Edge / Brave / Opera）
