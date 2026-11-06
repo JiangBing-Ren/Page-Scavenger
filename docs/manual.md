@@ -76,7 +76,7 @@ electron_mirror=https://npmmirror.com/mirrors/electron/
 
 ```bash
 node scripts/build.mjs   # 生成 dist/
-node scripts/test.mjs    # 40 项校验：几何、参数、产物、manifest
+node scripts/test.mjs    # 41 项校验：几何、参数、产物、manifest
 ```
 
 构建会先清空 `dist/`。这一步是有意为之：残留的旧产物会替新产物兜底，导致「本地通过、CI 失败」。
@@ -296,7 +296,7 @@ node scripts/test.mjs    # 40 项校验：几何、参数、产物、manifest
 
 ## 8. 音效
 
-音效统一走 `sound.js` 的 `play(name)`，共 14 个效果：
+音效统一走 `sound.js` 的 `play(name)`，共 15 个效果：
 
 刀·挥砍/切入/碎裂、炮·开火/裂缝/爆散、左轮·开火/弹孔/换弹、机枪·开火/弹着、黑洞·生成/吸附/吞噬、弹壳落地。
 
@@ -383,7 +383,7 @@ packages/
     fragments.js   切分、爆破碎块、裂缝、烟雾、弹壳
     pieces.js      碎片注册表与坐标变换（支持连切）
     render.js      刀光、爆痕、枪焰、弹仓、弹壳绘制
-    sound.js       14 个命名音效（采样优先 + 合成兜底）
+    sound.js       15 个命名音效（采样优先 + 合成兜底）
     assets/        音效采样
     score.js / freescore.js  关卡计分 / 自由模式计分
   extension/     MV3 外壳（Chrome / Firefox 双 manifest）
@@ -394,7 +394,7 @@ packages/
 scripts/
   build.mjs      零依赖 ESM→IIFE 打包器
   make-icons.mjs 程序化生成 PNG 图标
-  test.mjs       40 项校验
+  test.mjs       41 项校验
 ```
 
 宿主只负责三件事：提供存储适配器、决定何时激活、把配置塞进来。任何 `chrome.*` / `browser.*` 出现在 `core/` 都会让测试失败。

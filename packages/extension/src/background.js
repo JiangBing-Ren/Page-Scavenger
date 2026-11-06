@@ -104,9 +104,15 @@ async function ensureWeaponMenu() {
     const saved = data && data[SETTINGS_KEY];
     const current = saved && saved.weapon;
     if (current) {
-      ext.contextMenus.update(WEAPON_MENU_ID + ':' + current, { checked: true }, () => {
-        void ext.runtime.lastError;
-      });
+      // Chrome 走回调、Firefox 返回 Promise，两种写法都要能落地
+      if (isFirefox) {
+        const p = ext.contextMenus.update(WEAPON_MENU_ID + ':' + current, { checked: true });
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+      } else {
+        ext.contextMenus.update(WEAPON_MENU_ID + ':' + current, { checked: true }, () => {
+          void ext.runtime.lastError;
+        });
+      }
     }
   } catch (e) {}
 }

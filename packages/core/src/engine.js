@@ -1398,6 +1398,11 @@ export function createCleaner(options) {
       if (key === 'targetSizeLevel') {
         if (SIZE_LEVELS.indexOf(value) === -1) continue;
       }
+      // 换武器统一走 setWeapon：补弹仓、收掉残留黑洞都在这条路径上
+      if (key === 'weapon') {
+        if (value !== CONFIG.weapon) setWeapon(value);
+        continue;
+      }
       CONFIG[key] = value;
     }
 

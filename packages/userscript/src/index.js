@@ -6,6 +6,7 @@ import {
   HIT_STOPS,
   HIT_STOP_LABELS,
 } from '../../core/src/config.js';
+import { implementedWeapons, getWeapon } from '../../core/src/weapons.js';
 
 // 沿用旧版存储键，老用户的清理记录不会丢
 const STORE_KEY = 'adslash.marks.v1';
@@ -159,6 +160,16 @@ function injectUI() {
         config.executeOnRelease ? '⏳ 长按模式：开启 (松手炸开)' : '⚡ 长按模式：关闭 (即切)',
         () => cleaner.setConfig({ executeOnRelease: !config.executeOnRelease })
       );
+
+      // 和扩展弹窗保持一致：菜单里也能换武器（点一次切到下一把）
+      const weapons = implementedWeapons();
+      const currentWeapon = getWeapon(config.weapon) || weapons[0];
+      addItem(`🔫 武器：${currentWeapon ? currentWeapon.name : '刀'}`, () => {
+        if (!weapons.length) return;
+        const idx = weapons.findIndex((w) => currentWeapon && w.id === currentWeapon.id);
+        const next = weapons[(idx + 1) % weapons.length];
+        cleaner.setConfig({ weapon: next.id });
+      });
 
       addItem('↩️ 撤销上一次切除', () => {
         if (!cleaner.undoLast()) alert('没有可撤销的记录了');
