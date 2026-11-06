@@ -371,8 +371,7 @@ export function createSound(getConfig, assets) {
     mid.frequency.setValueAtTime(93, t);
     mid.frequency.linearRampToValueAtTime(69, t + 2.4);
 
-    const air = ctx.createBufferSource();
-    air.buffer = noise(ctx);
+    const air = noise(ctx);
     air.loop = true;
     const airFilter = ctx.createBiquadFilter();
     airFilter.type = 'lowpass';

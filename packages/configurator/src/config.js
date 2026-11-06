@@ -27,75 +27,104 @@ const BASIC_FIELDS = [
   { key: 'autoApplyMarks', label: '刷新后自动清理', type: 'toggle', hint: '记住切过的元素并自动隐藏' },
 ];
 
-// 高级参数按类别分组，顶部可按类别筛选，避免找武器参数时翻半天
+// 高级参数按武器分一级分类，每个武器下面再按用途分二级
 const ADV_GROUPS = [
-  ['weapon', '武器'],
-  ['sfx', '音效'],
-  ['multicut', '多刀'],
-  ['target', '判定'],
-  ['trail', '刀光'],
+  ['blade', '刀', [
+    ['multicut', '多刀'],
+    ['target', '判定'],
+    ['trail', '刀光'],
+    ['sfx', '音效'],
+  ]],
+  ['cannon', '炮', [
+    ['blast', '爆破'],
+    ['crack', '裂缝'],
+    ['sfx', '音效'],
+  ]],
+  ['revolver', '左轮', [
+    ['shot', '射击与弹仓'],
+    ['sfx', '音效'],
+  ]],
+  ['machinegun', '机枪', [
+    ['shot', '射击'],
+    ['sfx', '音效'],
+  ]],
+  ['blackhole', '黑洞', [
+    ['gravity', '引力'],
+    ['devour', '吞噬'],
+    ['sfx', '音效'],
+  ]],
 ];
 
 const ADV_FIELDS = [
-  // 武器
-  { key: 'cannonRadius', label: '炮 · 爆破半径', type: 'range', min: 60, max: 320, step: 10, suffix: 'px', group: 'weapon' },
-  { key: 'weaponCooldown', label: '炮 · 开火间隔', type: 'range', min: 60, max: 600, step: 10, suffix: 'ms', group: 'weapon' },
-  { key: 'blastHoleScale', label: '炮 · 洞口大小', type: 'range', min: 0.4, max: 1.2, step: 0.05, group: 'weapon' },
-  { key: 'blastHoleHold', label: '炮 · 洞口停留', type: 'range', min: 0, max: 1500, step: 50, suffix: 'ms', group: 'weapon' },
-  { key: 'crackWidth', label: '裂缝 · 粗细', type: 'range', min: 0.04, max: 0.3, step: 0.01, group: 'weapon' },
-  { key: 'crackLength', label: '裂缝 · 长短', type: 'range', min: 0.3, max: 2.5, step: 0.1, group: 'weapon' },
-  { key: 'crackStartWidth', label: '裂缝 · 起点宽度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'weapon' },
-  { key: 'crackEndWidth', label: '裂缝 · 末端宽度', type: 'range', min: 0.05, max: 1, step: 0.05, group: 'weapon' },
-  { key: 'revolverHoleRadius', label: '左轮 · 弹孔大小', type: 'range', min: 10, max: 90, step: 2, suffix: 'px', group: 'weapon' },
-  { key: 'revolverCooldown', label: '左轮 · 射击间隔', type: 'range', min: 120, max: 600, step: 10, suffix: 'ms', group: 'weapon' },
-  { key: 'revolverChambers', label: '左轮 · 弹仓容量', type: 'range', min: 1, max: 12, step: 1, group: 'weapon' },
-  { key: 'revolverReloadMs', label: '左轮 · 换弹时间', type: 'range', min: 200, max: 2500, step: 50, suffix: 'ms', group: 'weapon' },
-  { key: 'machinegunHoleRadius', label: '机枪 · 弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'weapon' },
-  { key: 'machinegunCooldown', label: '机枪 · 射速间隔', type: 'range', min: 30, max: 300, step: 10, suffix: 'ms', group: 'weapon' },
-  { key: 'machinegunSpread', label: '机枪 · 散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'weapon' },
-  { key: 'muzzleFlashEnabled', label: '机枪 · 枪口火光', type: 'toggle', group: 'weapon' },
-  { key: 'shellCasingsEnabled', label: '左轮 · 抛壳', type: 'toggle', group: 'weapon' },
-  { key: 'blackholeRadius', label: '黑洞 · 吸入半径', type: 'range', min: 60, max: 400, step: 10, suffix: 'px', group: 'weapon' },
-  { key: 'blackholeDurationMs', label: '黑洞 · 存活时长', type: 'range', min: 600, max: 6000, step: 100, suffix: 'ms', group: 'weapon' },
-  { key: 'blackholeCooldown', label: '黑洞 · 放置间隔', type: 'range', min: 120, max: 2000, step: 20, suffix: 'ms', group: 'weapon' },
-  { key: 'blackholeFieldRatio', label: '黑洞 · 引力场', type: 'range', min: 0.1, max: 1, step: 0.05, suffix: '×R', group: 'weapon' },
-  { key: 'blackholeCaptureRatio', label: '黑洞 · 可吸面积比', type: 'range', min: 1, max: 3, step: 0.05, group: 'weapon' },
-  { key: 'blackholeTearRatio', label: '黑洞 · 撕裂阈值', type: 'range', min: 0.3, max: 1.3, step: 0.05, group: 'weapon' },
-  { key: 'blackholeGrowEfficiency', label: '黑洞 · 成长效率', type: 'range', min: 0, max: 0.2, step: 0.005, group: 'weapon' },
-  { key: 'blackholeMaxAreaRatio', label: '黑洞 · 面积上限', type: 'range', min: 0.1, max: 1, step: 0.01, group: 'weapon' },
+  // 刀 · 多刀
+  { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'blade', sub: 'multicut' },
+  { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'blade', sub: 'multicut' },
+  { key: 'cutStepBase', label: '逐刀起始间隔', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'blade', sub: 'multicut' },
+  { key: 'cutStepDecay', label: '逐刀递减系数', type: 'range', min: 0.4, max: 1, step: 0.02, group: 'blade', sub: 'multicut' },
+  { key: 'cutStepMin', label: '逐刀最小间隔', type: 'range', min: 10, max: 150, step: 5, suffix: 'ms', group: 'blade', sub: 'multicut' },
+  // 刀 · 判定
+  { key: 'maxAncestorDepth', label: '向上搜索深度', type: 'range', min: 3, max: 30, step: 1, group: 'blade', sub: 'target' },
+  { key: 'maxTargetRatio', label: '目标尺寸上限', type: 'range', min: 0.3, max: 1, step: 0.05, group: 'blade', sub: 'target' },
+  { key: 'pierceRatio', label: '贯穿判定比例', type: 'range', min: 0.2, max: 1, step: 0.05, group: 'blade', sub: 'target' },
+  { key: 'sampleStep', label: '采样步长', type: 'range', min: 1, max: 12, step: 1, suffix: 'px', group: 'blade', sub: 'target' },
+  // 刀 · 刀光
+  { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'blade', sub: 'trail' },
+  { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'blade', sub: 'trail' },
+  // 刀 · 音效
+  { key: 'sfxBladeSwing', label: '挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeCut', label: '切入', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeBreak', label: '碎裂', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
 
-  // 音效（逐个可调，便于对比差异）
-  { key: 'sfxBladeSwing', label: '刀 · 挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxBladeCut', label: '刀 · 切入', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxBladeBreak', label: '刀 · 碎裂', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxCannonFire', label: '炮 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxCannonCrack', label: '炮 · 裂缝', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxCannonBreak', label: '炮 · 爆散', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxRevolverFire', label: '左轮 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxRevolverHit', label: '左轮 · 弹孔', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxMachinegunFire', label: '机枪 · 开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxMachinegunHit', label: '机枪 · 弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxBlackholeOpen', label: '黑洞 · 生成', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxBlackholeHum', label: '黑洞 · 吸附', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxBlackholeEat', label: '黑洞 · 吞噬', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxReload', label: '左轮 · 换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  { key: 'sfxShellDrop', label: '左轮 · 弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'sfx' },
-  // 长按模式（刀：多刀蓄力；黑洞：按住拖动吞吸）
-  { key: 'maxCutsPerTarget', label: '单目标最多刀数', type: 'range', min: 1, max: 20, step: 1, group: 'multicut' },
-  { key: 'minCutGap', label: '叠刀最小间距', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'multicut' },
-  { key: 'cutStepBase', label: '逐刀起始间隔', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'multicut' },
-  { key: 'cutStepDecay', label: '逐刀递减系数', type: 'range', min: 0.4, max: 1, step: 0.02, group: 'multicut' },
-  { key: 'cutStepMin', label: '逐刀最小间隔', type: 'range', min: 10, max: 150, step: 5, suffix: 'ms', group: 'multicut' },
+  // 炮 · 爆破
+  { key: 'cannonRadius', label: '爆破半径', type: 'range', min: 60, max: 320, step: 10, suffix: 'px', group: 'cannon', sub: 'blast' },
+  { key: 'weaponCooldown', label: '开火间隔', type: 'range', min: 60, max: 600, step: 10, suffix: 'ms', group: 'cannon', sub: 'blast' },
+  { key: 'blastHoleScale', label: '洞口大小', type: 'range', min: 0.4, max: 1.2, step: 0.05, group: 'cannon', sub: 'blast' },
+  { key: 'blastHoleHold', label: '洞口停留', type: 'range', min: 0, max: 1500, step: 50, suffix: 'ms', group: 'cannon', sub: 'blast' },
+  // 炮 · 裂缝
+  { key: 'crackWidth', label: '粗细', type: 'range', min: 0.04, max: 0.3, step: 0.01, group: 'cannon', sub: 'crack' },
+  { key: 'crackLength', label: '长短', type: 'range', min: 0.3, max: 2.5, step: 0.1, group: 'cannon', sub: 'crack' },
+  { key: 'crackStartWidth', label: '起点宽度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'cannon', sub: 'crack' },
+  { key: 'crackEndWidth', label: '末端宽度', type: 'range', min: 0.05, max: 1, step: 0.05, group: 'cannon', sub: 'crack' },
+  // 炮 · 音效
+  { key: 'sfxCannonFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
+  { key: 'sfxCannonCrack', label: '裂缝', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
+  { key: 'sfxCannonBreak', label: '爆散', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
 
-  // 目标判定
-  { key: 'maxAncestorDepth', label: '向上搜索深度', type: 'range', min: 3, max: 30, step: 1, group: 'target' },
-  { key: 'maxTargetRatio', label: '目标尺寸上限', type: 'range', min: 0.3, max: 1, step: 0.05, group: 'target' },
-  { key: 'pierceRatio', label: '贯穿判定比例', type: 'range', min: 0.2, max: 1, step: 0.05, group: 'target' },
-  { key: 'sampleStep', label: '采样步长', type: 'range', min: 1, max: 12, step: 1, suffix: 'px', group: 'target' },
+  // 左轮 · 射击与弹仓
+  { key: 'revolverHoleRadius', label: '弹孔大小', type: 'range', min: 10, max: 90, step: 2, suffix: 'px', group: 'revolver', sub: 'shot' },
+  { key: 'revolverCooldown', label: '射击间隔', type: 'range', min: 120, max: 600, step: 10, suffix: 'ms', group: 'revolver', sub: 'shot' },
+  { key: 'revolverChambers', label: '弹仓容量', type: 'range', min: 1, max: 12, step: 1, group: 'revolver', sub: 'shot' },
+  { key: 'revolverReloadMs', label: '换弹时间', type: 'range', min: 200, max: 2500, step: 50, suffix: 'ms', group: 'revolver', sub: 'shot' },
+  { key: 'shellCasingsEnabled', label: '抛壳', type: 'toggle', group: 'revolver', sub: 'shot' },
+  // 左轮 · 音效
+  { key: 'sfxRevolverFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
+  { key: 'sfxRevolverHit', label: '弹孔', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
+  { key: 'sfxReload', label: '换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
+  { key: 'sfxShellDrop', label: '弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
 
-  // 刀光
-  { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'trail' },
-  { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'trail' },
+  // 机枪 · 射击
+  { key: 'machinegunHoleRadius', label: '弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'machinegun', sub: 'shot' },
+  { key: 'machinegunCooldown', label: '射速间隔', type: 'range', min: 30, max: 300, step: 10, suffix: 'ms', group: 'machinegun', sub: 'shot' },
+  { key: 'machinegunSpread', label: '散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'machinegun', sub: 'shot' },
+  { key: 'muzzleFlashEnabled', label: '枪口火光', type: 'toggle', group: 'machinegun', sub: 'shot' },
+  // 机枪 · 音效
+  { key: 'sfxMachinegunFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
+  { key: 'sfxMachinegunHit', label: '弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
+
+  // 黑洞 · 引力
+  { key: 'blackholeRadius', label: '初始大小', type: 'range', min: 40, max: 400, step: 10, suffix: 'px', group: 'blackhole', sub: 'gravity' },
+  { key: 'blackholeFieldRatio', label: '引力场', type: 'range', min: 0.1, max: 1, step: 0.05, suffix: '×R', group: 'blackhole', sub: 'gravity' },
+  { key: 'blackholeCaptureRatio', label: '可吸面积比', type: 'range', min: 1, max: 3, step: 0.05, group: 'blackhole', sub: 'gravity' },
+  { key: 'blackholeCooldown', label: '放置间隔', type: 'range', min: 120, max: 2000, step: 20, suffix: 'ms', group: 'blackhole', sub: 'gravity' },
+  { key: 'blackholeDurationMs', label: '存活时长', type: 'range', min: 600, max: 6000, step: 100, suffix: 'ms', group: 'blackhole', sub: 'gravity' },
+  // 黑洞 · 吞噬
+  { key: 'blackholeTearRatio', label: '撕裂阈值', type: 'range', min: 0.3, max: 1.3, step: 0.05, group: 'blackhole', sub: 'devour' },
+  { key: 'blackholeGrowEfficiency', label: '成长效率', type: 'range', min: 0, max: 0.2, step: 0.005, group: 'blackhole', sub: 'devour' },
+  { key: 'blackholeMaxAreaRatio', label: '面积上限', type: 'range', min: 0.1, max: 1, step: 0.01, group: 'blackhole', sub: 'devour' },
+  // 黑洞 · 音效
+  { key: 'sfxBlackholeOpen', label: '生成', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
+  { key: 'sfxBlackholeHum', label: '吸附', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
+  { key: 'sfxBlackholeEat', label: '吞噬', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
 ];
 
 let draft = { ...DEFAULT_CONFIG };
@@ -326,21 +355,41 @@ function renderAdvanced() {
     chips.appendChild(chip);
   }
 
-  const groups = advFilter === 'all' ? ADV_GROUPS : ADV_GROUPS.filter(([key]) => key === advFilter);
+  const weapons = advFilter === 'all' ? ADV_GROUPS : ADV_GROUPS.filter(([key]) => key === advFilter);
 
-  for (const [key, label] of groups) {
-    const fields = ADV_FIELDS.filter((field) => field.group === key);
-    if (!fields.length) continue;
+  for (const [wKey, wLabel, subs] of weapons) {
+    if (!ADV_FIELDS.some((field) => field.group === wKey)) continue;
 
     const title = document.createElement('h3');
     title.className = 'group-title';
-    title.textContent = label;
+    title.textContent = wLabel;
     container.appendChild(title);
 
-    const grid = document.createElement('div');
-    grid.className = 'grid';
-    for (const field of fields) grid.appendChild(fieldRow(field));
-    container.appendChild(grid);
+    for (const [subKey, subLabel] of subs) {
+      const fields = ADV_FIELDS.filter((field) => field.group === wKey && field.sub === subKey);
+      if (!fields.length) continue;
+
+      const sub = document.createElement('h4');
+      sub.className = 'subgroup-title';
+      sub.textContent = subLabel;
+      container.appendChild(sub);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      for (const field of fields) grid.appendChild(fieldRow(field));
+      container.appendChild(grid);
+    }
+
+    // 兜底：没归到二级分类的字段直接挂在武器下面
+    const rest = ADV_FIELDS.filter(
+      (field) => field.group === wKey && !subs.some(([subKey]) => field.sub === subKey)
+    );
+    if (rest.length) {
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      for (const field of rest) grid.appendChild(fieldRow(field));
+      container.appendChild(grid);
+    }
   }
 }
 

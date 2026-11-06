@@ -356,7 +356,7 @@ export function createCleaner(options) {
 
       // 需要撕裂就走裂隙粉碎（以最近点为撕裂源扇形切裂）；整吞才是一整块飞进去
       if (needTear) {
-        spawnTornDevour(el, rect, hole.x, hole.y, { filter: DEVOUR_FILTER, pieces });
+        spawnTornDevour(el, rect, hole.x, hole.y, { filter: DEVOUR_FILTER, pieces, hole });
       } else {
         spawnDevourFragments(el, rect, hole.x, hole.y, { filter: DEVOUR_FILTER, pieces: 1 });
       }
@@ -1166,6 +1166,8 @@ export function createCleaner(options) {
       return;
     }
 
+    state.frames = (state.frames || 0) + 1;
+
     const ctx = state.ctx;
     ctx.clearRect(0, 0, state.cssW, state.cssH);
 
@@ -1567,6 +1569,7 @@ export function createCleaner(options) {
       chambers: state.chambers,
       shells: state.particles.filter((p) => p.isShell).length,
       blackholes: state.blackholes.length,
+      frames: state.frames || 0,
       blackholeRadius: state.blackholes[0] ? Math.round(state.blackholes[0].radius) : 0,
       blackholeAt: state.blackholes[0]
         ? { x: Math.round(state.blackholes[0].x), y: Math.round(state.blackholes[0].y) }

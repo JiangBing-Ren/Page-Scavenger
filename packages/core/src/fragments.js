@@ -890,12 +890,81 @@ export function spawnTornDevour(el, rect, targetX, targetY, options) {
   const wantPieces = Math.max(2, Math.min(12, Math.floor(Number(opts.pieces) || 0) || 4));
   const baseAngle = Math.atan2(targetY - (box.top + oy), targetX - (box.left + ox));
 
-  // 以牵引方向为中心扇开 cutCount 条裂纹，切出不规则碎块
+  // ---- 1) 裂纹：从撕裂源朝元素内部扇开，带转折，逐段长出来 ----
+  const toSubpath = (points) =>
+    'M' + points.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L') + ' Z';
+
+  const ribbon = (points, width) => {
+    const left = [];
+    const right = [];
+    for (let i = 0; i < points.length; i++) {
+      const prev = points[i - 1] || points[i];
+      const next = points[i + 1] || points[i];
+      const dx = next.x - prev.x;
+      const dy = next.y - prev.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const half = Math.max(0.4, width / 2);
+      left.push({ x: points[i].x - (dy / len) * half, y: points[i].y + (dx / len) * half });
+      right.push({ x: points[i].x + (dy / len) * half, y: points[i].y - (dx / len) * half });
+    }
+    return [...left, ...right.reverse()];
+  };
+
+  const reach = Math.hypot(Math.max(ox, box.width - ox), Math.max(oy, box.height - oy));
+  const crackWidth = Math.max(2.5, Math.min(12, box.width * 0.02));
+  const mains = 3 + Math.floor(Math.random() * 2);
+  const crackLines = [];
+
+  for (let i = 0; i < mains; i++) {
+    const spread = mains === 1 ? 0 : (i / (mains - 1)) * 2 - 1;
+    // baseAngle 指向洞心，裂纹往反方向（背离洞）撕开
+    let angle = baseAngle + Math.PI + spread * 1.15 + (Math.random() - 0.5) * 0.3;
+    const steps = 4 + Math.floor(Math.random() * 3);
+    const segLen = (reach / steps) * (0.8 + Math.random() * 0.4);
+    let x = ox;
+    let y = oy;
+    const pts = [{ x, y }];
+    for (let s = 0; s < steps; s++) {
+      angle += (Math.random() - 0.5) * 0.55;
+      x += Math.cos(angle) * segLen;
+      y += Math.sin(angle) * segLen;
+      pts.push({ x: clamp(x, 0, box.width), y: clamp(y, 0, box.height) });
+    }
+    crackLines.push(pts);
+  }
+
+  // 外框 + 已长出的裂纹，用 evenodd 挖成缝
+  const maskFor = (reveal) => {
+    const parts = [`M0 0 H${box.width.toFixed(1)} V${box.height.toFixed(1)} H0 Z`];
+    crackLines.forEach((pts, idx) => {
+      const n = Math.max(0, Math.min(pts.length, reveal[idx] || 0));
+      if (n >= 2) parts.push(toSubpath(ribbon(pts.slice(0, n), crackWidth)));
+    });
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${box.width}" height="${box.height}">` +
+      `<path d="${parts.join(' ')}" fill="#fff" fill-rule="evenodd"/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  };
+
+  // 裂纹按轮次同时生长，排成一张「每步显形到第几个点」的表
+  const reveal = crackLines.map(() => 1);
+  const segCounts = crackLines.map((pts) => pts.length - 1);
+  const schedule = [];
+  for (let round = 0; round < Math.max(...segCounts); round++) {
+    for (let c = 0; c < crackLines.length; c++) {
+      if (round < segCounts[c]) {
+        reveal[c] = round + 2;
+        schedule.push(reveal.slice());
+      }
+    }
+  }
+
+  // ---- 2) 沿撕裂源扇形切块 ----
   let pieces = [{ poly: full }];
   const cuts = wantPieces - 1;
   for (let i = 0; i < cuts; i++) {
-    const spread = ((i + 0.5) / cuts) * 2 - 1;
-    const angle = baseAngle + spread * 1.1 + (Math.random() - 0.5) * 0.35;
+    const spread = cuts === 1 ? 0 : ((i + 0.5) / cuts) * 2 - 1;
+    const angle = baseAngle + spread * 1.45 + (Math.random() - 0.5) * 0.3;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
     const next = [];
@@ -913,76 +982,106 @@ export function spawnTornDevour(el, rect, targetX, targetY, options) {
   const filter = opts.filter || 'brightness(2.2) contrast(1.5) saturate(0.6)';
   const build = makeBuilder(el, rect, box, oversized, filter);
 
-  const items = pieces.map(({ poly }) => {
-    let sx = 0;
-    let sy = 0;
-    for (const p of poly) {
-      sx += p.x;
-      sy += p.y;
-    }
-    const cx = sx / poly.length;
-    const cy = sy / poly.length;
-    const node = build(poly);
-    // 绕碎块自身中心旋转，否则会绕整块元素中心乱甩
-    node.style.transformOrigin = `${cx.toFixed(1)}px ${cy.toFixed(1)}px`;
-    return { node, cx: box.left + cx, cy: box.top + cy };
-  });
+  const paintMask = (node, url) => {
+    node.style.maskImage = url;
+    node.style.webkitMaskImage = url;
+    node.style.maskSize = '100% 100%';
+    node.style.maskRepeat = 'no-repeat';
+  };
 
-  // 近的先被拉走、远的慢半拍，读起来才像被牵引而不是整体平移
-  const sourceX = box.left + ox;
-  const sourceY = box.top + oy;
-  const distToSource = (item) => Math.hypot(item.cx - sourceX, item.cy - sourceY);
-  items.sort((a, b) => distToSource(a) - distToSource(b));
+  // 裂纹阶段：先亮出整块，再把裂缝一段段挖开
+  const crackNode = build(full);
+  paintMask(crackNode, maskFor(reveal.map(() => 1)));
 
-  items.forEach((item, index) => {
-    const dx = targetX - item.cx;
-    const dy = targetY - item.cy;
-    const dist = Math.hypot(dx, dy) || 1;
-    const pop = 3 + Math.random() * 5;
-    const popX = -(dx / dist) * pop;
-    const popY = -(dy / dist) * pop;
-    const spin = (Math.random() < 0.5 ? -1 : 1) * (120 + Math.random() * 200);
-    const duration = Math.max(260, Math.min(900, dist * 0.9 + 260));
-    const delay = Math.min(300, index * 26 + dist * 0.08);
-
-    try {
-      item.node.animate(
-        [
-          { transform: 'translate3d(0,0,0) rotate(0deg) scale(1)', opacity: 1 },
-          {
-            transform: `translate3d(${popX.toFixed(1)}px, ${popY.toFixed(1)}px, 0) rotate(${(spin * 0.08).toFixed(0)}deg) scale(1)`,
-            opacity: 1,
-            offset: 0.15,
-          },
-          {
-            transform: `translate3d(${(dx * 0.62 - dy * 0.18).toFixed(1)}px, ${(dy * 0.62 + dx * 0.18).toFixed(1)}px, 0) rotate(${(spin * 0.55).toFixed(0)}deg) scale(0.5)`,
-            opacity: 0.9,
-            offset: 0.62,
-          },
-          {
-            transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${spin.toFixed(0)}deg) scale(0.06)`,
-            opacity: 0,
-          },
-        ],
-        {
-          duration,
-          delay,
-          easing: 'cubic-bezier(0.35, 0.02, 0.7, 0.45)',
-          fill: 'forwards',
-        }
-      );
-    } catch (e) {
-      item.node.style.transition = `transform ${duration}ms ease-in, opacity ${duration}ms ease-in`;
-      item.node.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.06) rotate(${spin}deg)`;
-      item.node.style.opacity = '0';
-    }
-
+  // 裂纹要压在一口气内长完，否则整块看起来像没动
+  const stepMs = Math.max(12, Math.min(26, Math.round(180 / Math.max(1, schedule.length))));
+  schedule.forEach((step, index) => {
     setTimeout(() => {
-      if (item.node.parentNode) item.node.parentNode.removeChild(item.node);
-    }, delay + duration + 40);
+      if (crackNode.parentNode) paintMask(crackNode, maskFor(step));
+    }, index * stepMs);
   });
 
-  return items.length > 0;
+  const crackMs = Math.max(140, schedule.length * stepMs);
+
+  // 裂纹长完：整块换成碎块，按离撕裂源远近先后被吸走
+  setTimeout(() => {
+    if (crackNode.parentNode) crackNode.parentNode.removeChild(crackNode);
+
+    const finalMask = maskFor(reveal);
+    const sourceX = box.left + ox;
+    const sourceY = box.top + oy;
+
+    const items = pieces.map(({ poly }) => {
+      let sx = 0;
+      let sy = 0;
+      for (const p of poly) {
+        sx += p.x;
+        sy += p.y;
+      }
+      const cx = sx / poly.length;
+      const cy = sy / poly.length;
+      const node = build(poly);
+      paintMask(node, finalMask);
+      node.style.transformOrigin = `${cx.toFixed(1)}px ${cy.toFixed(1)}px`;
+      return { node, cx: box.left + cx, cy: box.top + cy };
+    });
+
+    items.sort(
+      (a, b) =>
+        Math.hypot(a.cx - sourceX, a.cy - sourceY) - Math.hypot(b.cx - sourceX, b.cy - sourceY)
+    );
+
+    items.forEach((item, index) => {
+      // 洞可能在追光标，落点要取动画开始那一刻的位置
+      const live = opts.hole && Number.isFinite(opts.hole.x) ? opts.hole : null;
+      const tx = live ? live.x : targetX;
+      const ty = live ? live.y : targetY;
+
+      const dx = tx - item.cx;
+      const dy = ty - item.cy;
+      const dist = Math.hypot(dx, dy) || 1;
+      // 先被扯开一道缝，再迅速旋入
+      const pop = 8 + Math.random() * 10;
+      const popX = -(dx / dist) * pop;
+      const popY = -(dy / dist) * pop;
+      const spin = (Math.random() < 0.5 ? -1 : 1) * (150 + Math.random() * 220);
+      const duration = Math.max(320, Math.min(640, dist * 0.8 + 240));
+      const delay = index * 40;
+
+      try {
+        item.node.animate(
+          [
+            { transform: 'translate3d(0,0,0) rotate(0deg) scale(1, 1)', opacity: 1 },
+            {
+              transform: `translate3d(${popX.toFixed(1)}px, ${popY.toFixed(1)}px, 0) rotate(${(spin * 0.06).toFixed(0)}deg) scale(1.05, 1.05)`,
+              opacity: 1,
+              offset: 0.16,
+            },
+            {
+              transform: `translate3d(${(dx * 0.5 - dy * 0.16).toFixed(1)}px, ${(dy * 0.5 + dx * 0.16).toFixed(1)}px, 0) rotate(${(spin * 0.45).toFixed(0)}deg) scale(0.62, 0.44)`,
+              opacity: 0.92,
+              offset: 0.6,
+            },
+            {
+              transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${spin.toFixed(0)}deg) scale(0.04, 0.04)`,
+              opacity: 0,
+            },
+          ],
+          { duration, delay, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)', fill: 'forwards' }
+        );
+      } catch (e) {
+        item.node.style.transition = `transform ${duration}ms ease-in, opacity ${duration}ms ease-in`;
+        item.node.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(0.04) rotate(${spin}deg)`;
+        item.node.style.opacity = '0';
+      }
+
+      setTimeout(() => {
+        if (item.node.parentNode) item.node.parentNode.removeChild(item.node);
+      }, delay + duration + 40);
+    });
+  }, crackMs);
+
+  return true;
 }
 
 export function spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, hitStop) {

@@ -1,8 +1,11 @@
+import { implementedWeapons } from '../../core/src/weapons.js';
+
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 const isFirefox = typeof browser !== 'undefined';
 
 const MSG_PREFIX = 'adslash:';
 const MENU_ID = 'adslash-toggle';
+const WEAPON_MENU_ID = 'adslash-weapon';
 const TUTORIAL_PATH = 'play/levels/index.html';
 
 function setBadge(tabId, active) {
@@ -52,6 +55,70 @@ function ensureMenu() {
       });
     }
   } catch (e) {}
+
+  ensureWeaponMenu();
+}
+
+// 右键「切换武器」子菜单：每个已实现武器一条单选
+const SETTINGS_KEY = 'adslash.settings';
+
+function createMenuItem(details) {
+  return new Promise((resolve) => {
+    try {
+      if (isFirefox) {
+        const p = ext.contextMenus.create(details);
+        if (p && typeof p.then === 'function') p.then(resolve, resolve);
+        else resolve();
+      } else {
+        ext.contextMenus.create(details, () => {
+          void ext.runtime.lastError;
+          resolve();
+        });
+      }
+    } catch (e) {
+      resolve();
+    }
+  });
+}
+
+async function ensureWeaponMenu() {
+  await createMenuItem({
+    id: WEAPON_MENU_ID,
+    title: '页面清道夫：切换武器',
+    contexts: ['page', 'frame'],
+  });
+
+  for (const weapon of implementedWeapons()) {
+    await createMenuItem({
+      id: WEAPON_MENU_ID + ':' + weapon.id,
+      parentId: WEAPON_MENU_ID,
+      title: weapon.name,
+      type: 'radio',
+      contexts: ['page', 'frame'],
+    });
+  }
+
+  // 把当前武器标成选中状态
+  try {
+    const data = await ext.storage.sync.get(SETTINGS_KEY);
+    const saved = data && data[SETTINGS_KEY];
+    const current = saved && saved.weapon;
+    if (current) {
+      ext.contextMenus.update(WEAPON_MENU_ID + ':' + current, { checked: true }, () => {
+        void ext.runtime.lastError;
+      });
+    }
+  } catch (e) {}
+}
+
+async function switchWeapon(tabId, weapon) {
+  if (typeof tabId !== 'number') return;
+  try {
+    await ext.tabs.sendMessage(tabId, {
+      type: MSG_PREFIX + 'setConfig',
+      patch: { weapon },
+    });
+  } catch (e) {}
 }
 
 ext.runtime.onInstalled.addListener((details) => {
@@ -76,7 +143,17 @@ if (ext.commands && ext.commands.onCommand) {
 
 if (ext.contextMenus && ext.contextMenus.onClicked) {
   ext.contextMenus.onClicked.addListener((info, tab) => {
-    if (info && info.menuItemId === MENU_ID && tab) toggleTab(tab.id);
+    if (!info) return;
+    if (info.menuItemId === MENU_ID) {
+      if (tab) toggleTab(tab.id);
+      return;
+    }
+
+    const id = String(info.menuItemId || '');
+    const prefix = WEAPON_MENU_ID + ':';
+    if (id.indexOf(prefix) === 0 && tab) {
+      switchWeapon(tab.id, id.slice(prefix.length));
+    }
   });
 }
 
