@@ -4,7 +4,11 @@ import {
   HIT_STOPS,
   HIT_STOP_LABELS,
 } from '../../../core/src/config.js';
-import { getWeapon } from '../../../core/src/weapons.js';
+import { implementedWeapons } from '../../../core/src/weapons.js';
+
+const WEAPON_IDS = implementedWeapons().map((weapon) => weapon.id);
+const WEAPON_LABELS = {};
+for (const weapon of implementedWeapons()) WEAPON_LABELS[weapon.id] = weapon.name;
 
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 const MSG = 'adslash:';
@@ -45,9 +49,9 @@ function renderState(state) {
 
   $('host').textContent = (state && state.host) || location.hostname || '当前页面';
 
-  // 顶部信息条：当前武器与已切除数量
-  const weapon = getWeapon(config.weapon);
-  $('meta-weapon').textContent = weapon ? weapon.name : '刀';
+  // 武器可以在这里直接换，不用再进高级配置
+  fillSelect($('weapon'), WEAPON_IDS, WEAPON_LABELS, config.weapon || 'blade');
+
   $('meta-slash').textContent = String((state && state.slashCount) || 0);
 
   fillSelect($('size'), SIZE_LEVELS, SIZE_LABELS, config.targetSizeLevel || 'auto');
@@ -115,6 +119,7 @@ async function init() {
     }
   });
 
+  $('weapon').addEventListener('change', (e) => applyConfig({ weapon: e.target.value }));
   $('size').addEventListener('change', (e) => applyConfig({ targetSizeLevel: e.target.value }));
   $('hitStop').addEventListener('change', (e) => applyConfig({ hitStop: Number(e.target.value) }));
   $('onRelease').addEventListener('change', (e) =>
