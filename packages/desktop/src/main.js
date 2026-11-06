@@ -56,6 +56,16 @@ let guideWin = null;
 let configWin = null;
 let toolbarHeight = 96;
 let lastGameState = { active: false, config: {} };
+// 由页面 preload 回报的已实现武器，供右键菜单生成单选项
+let implementedWeapons = [];
+
+function pickWeapon(id) {
+  if (!view || view.webContents.isDestroyed()) return;
+  settings.config = Object.assign({}, settings.config, { weapon: id });
+  saveSettings();
+  view.webContents.send('adslash:config', { weapon: id });
+  pushConfig();
+}
 
 function sendNav(patch) {
   if (!win || win.isDestroyed()) return;
@@ -150,6 +160,38 @@ function createWindow() {
     if (isMainFrame && code !== -3) sendNav({ error: `${desc}（${code}）` });
   });
   wc.on('did-finish-load', () => pushConfig());
+
+  // 右键菜单：开关斩击、切换武器、关卡、配置
+  wc.on('context-menu', () => {
+    const weapon =
+      (lastGameState && lastGameState.config && lastGameState.config.weapon) || 'blade';
+    const list = implementedWeapons.length
+      ? implementedWeapons
+      : [{ id: 'blade', name: '刀' }];
+
+    const template = [
+      { label: '开启 / 关闭斩击', click: () => wc.send('adslash:cmd', 'toggle') },
+      { type: 'separator' },
+      {
+        label: '切换武器',
+        submenu: list.map((item) => ({
+          label: item.name,
+          type: 'radio',
+          checked: item.id === weapon,
+          click: () => pickWeapon(item.id),
+        })),
+      },
+      { type: 'separator' },
+      {
+        label: '关卡',
+        click: () =>
+          wc.loadFile(path.join(assetsDir(), 'play', 'levels', 'index.html')).catch(() => {}),
+      },
+      { label: '配置', click: () => openConfig() },
+    ];
+
+    Menu.buildFromTemplate(template).popup({ window: win });
+  });
 
   // Alt+S 在页面内直接开关，和扩展的快捷键保持一致
   wc.on('before-input-event', (event, input) => {
@@ -603,6 +645,11 @@ ipcMain.on('adslash:state', (_e, state) => {
   if (!state || typeof state !== 'object') return;
   lastGameState = state;
   sendGame();
+});
+
+ipcMain.on('adslash:weapons', (_e, list) => {
+  if (!Array.isArray(list)) return;
+  implementedWeapons = list.filter((w) => w && w.id && w.name);
 });
 
 ipcMain.on('ui:open-guide', () => openGuide());

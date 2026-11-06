@@ -183,6 +183,48 @@ input[type="checkbox"]:checked::after {
   margin-top: 10px;
 }
 
+/* 顶部信息条：版本 / 当前武器 / 已切除数目 + 关卡与配置入口 */
+.meta {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.meta-row {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #8593a5;
+}
+
+.meta-row b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.meta-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.meta-actions button {
+  flex: 1 1 auto;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.meta-actions button:hover {
+  background: rgba(0, 255, 204, 0.08);
+}
+
 .actions button {
   flex: 1 1 auto;
   padding: 7px 8px;

@@ -89,4 +89,15 @@ function boot() {
 
   report();
   console.log('[adslash] 引擎已注入', host);
+
+  // 让主进程的右键菜单知道有哪些武器可用
+  try {
+    ipcRenderer.send(
+      'adslash:weapons',
+      cleaner
+        .getWeapons()
+        .filter((w) => w.implemented)
+        .map((w) => ({ id: w.id, name: w.name }))
+    );
+  } catch (e) {}
 }

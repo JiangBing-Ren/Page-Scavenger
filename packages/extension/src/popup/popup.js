@@ -4,6 +4,7 @@ import {
   HIT_STOPS,
   HIT_STOP_LABELS,
 } from '../../../core/src/config.js';
+import { getWeapon } from '../../../core/src/weapons.js';
 
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 const MSG = 'adslash:';
@@ -44,6 +45,11 @@ function renderState(state) {
 
   $('host').textContent = (state && state.host) || location.hostname || '当前页面';
 
+  // 顶部信息条：当前武器与已切除数量
+  const weapon = getWeapon(config.weapon);
+  $('meta-weapon').textContent = weapon ? weapon.name : '刀';
+  $('meta-slash').textContent = String((state && state.slashCount) || 0);
+
   fillSelect($('size'), SIZE_LEVELS, SIZE_LABELS, config.targetSizeLevel || 'auto');
   fillSelect($('hitStop'), HIT_STOPS, HIT_STOP_LABELS, config.hitStop == null ? 40 : config.hitStop);
 
@@ -73,6 +79,10 @@ function applyConfig(patch) {
 }
 
 async function init() {
+  try {
+    $('meta-ver').textContent = 'v' + ext.runtime.getManifest().version;
+  } catch (e) {}
+
   let tab = null;
   try {
     const tabs = await ext.tabs.query({ active: true, currentWindow: true });
