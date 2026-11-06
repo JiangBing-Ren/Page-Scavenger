@@ -55,9 +55,10 @@ scripts/                ← 构建、图标、测试；不放运行时逻辑
 
 1. 三处版本号对齐
 2. `node scripts/build.mjs && node scripts/test.mjs`，且确认 `dist/` 是这次重新生成的
-3. 本地加载 `dist/extension`，跑一遍：斩击、四种武器各打一发、开一关、改一次配置并保存
+3. 本地加载 `dist/extension`，跑一遍：斩击、五种武器各打一发、开一关、改一次配置并保存
 4. 确认 `dist/*/assets/` 里有 mp3（构建会整目录拷贝，漏拷时采样会静默回落合成音）
-5. 提交并推送；CI 通过后再取 `page-cleaner-build` artifact 分发
+5. 需要 Steam 演示包时再跑 `node scripts/package-steam.mjs`，并用打包后的 exe 自检一遍（`ADSLASH_SELFTEST=1`）
+6. 提交并推送；CI 通过后再取 `page-cleaner-build` artifact 分发
 
 ### 2.3 分发形态
 
@@ -66,7 +67,7 @@ scripts/                ← 构建、图标、测试；不放运行时逻辑
 | GitHub Releases | `dist/extension`、`dist/extension-firefox`、油猴脚本 | 打包成 zip 方便下载 |
 | Chrome Web Store / Edge Add-ons | 未上架 | 上架前需要商店材料与隐私说明 |
 | Firefox AMO | 未发布 | 临时载入重启失效，长期使用必须签名 |
-| Steam | 未打包 | 计划用 Electron 版承载，需 electron-builder 与 Steamworks |
+| Steam | `dist/steam-demo/` | `node scripts/package-steam.mjs`：零依赖，复用 Electron 运行时 + `resources/app`，输出可直接当 depot 上传的目录；`steam_appid.txt` 默认占位 480，用 `STEAM_APP_ID` 覆盖 |
 
 ## 3. 五类日常改动
 

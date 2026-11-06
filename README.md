@@ -184,7 +184,19 @@ registry=https://registry.npmmirror.com
 electron_mirror=https://npmmirror.com/mirrors/electron/
 ```
 
-打包与 Steam 集成尚未配置。
+### 打 Steam 演示包
+
+```bash
+node scripts/build.mjs && node scripts/package-steam.mjs
+# 或 npm run steam
+```
+
+产物是 `dist/steam-demo/`：解压即运行的绿色目录，Steamworks 直接把该目录当作 depot 内容根上传即可。
+
+- 主程序 `PageScavenger.exe`，资源在 `resources/`（`desktop/` 内置浏览器与关卡、`extension*/` 可导出的扩展）
+- `steam_appid.txt` 默认写占位值 480（Valve 的 Spacewar 测试应用），可用 `STEAM_APP_ID=你的AppID` 覆盖；正式上传前请替换或删除
+- 不打安装包：Steam 分发的是目录，安装器反而多余
+- Steamworks 集成（成就、云存档）尚未接入
 
 ## 从源码构建
 
