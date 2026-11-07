@@ -4,6 +4,12 @@ import {
   SIZE_LABELS,
   HIT_STOPS,
   HIT_STOP_LABELS,
+  BLACKHOLE_STYLES,
+  BLACKHOLE_STYLE_LABELS,
+  CANNON_BREAK_STYLES,
+  CANNON_BREAK_STYLE_LABELS,
+  BLADE_STYLES,
+  BLADE_STYLE_LABELS,
 } from '../../core/src/config.js';
 import { createCleaner } from '../../core/src/engine.js';
 import { sampleUrls, sampleBytes } from '../../core/src/sound.js';
@@ -68,6 +74,8 @@ const ADV_FIELDS = [
   { key: 'pierceRatio', label: '贯穿判定比例', type: 'range', min: 0.2, max: 1, step: 0.05, group: 'blade', sub: 'target' },
   { key: 'sampleStep', label: '采样步长', type: 'range', min: 1, max: 12, step: 1, suffix: 'px', group: 'blade', sub: 'target' },
   // 刀 · 刀光
+  { key: 'bladeStyle', label: '斩击形态', type: 'select', options: BLADE_STYLES, labels: BLADE_STYLE_LABELS, group: 'blade', sub: 'trail' },
+  { key: 'bladeFxDurationMs', label: '白热序列时长', type: 'range', min: 200, max: 1700, step: 50, suffix: 'ms', group: 'blade', sub: 'trail', hint: '仅「白热刃口 Slash wipe」生效；1700ms 接近 pixelfx 原版节奏' },
   { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'blade', sub: 'trail' },
   { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'blade', sub: 'trail' },
   // 刀 · 音效
@@ -81,6 +89,8 @@ const ADV_FIELDS = [
   { key: 'blastHoleScale', label: '洞口大小', type: 'range', min: 0.4, max: 1.2, step: 0.05, group: 'cannon', sub: 'blast' },
   { key: 'blastHoleHold', label: '洞口停留', type: 'range', min: 0, max: 1500, step: 50, suffix: 'ms', group: 'cannon', sub: 'blast' },
   // 炮 · 裂缝
+  { key: 'cannonBreakStyle', label: '破碎形态', type: 'select', options: CANNON_BREAK_STYLES, labels: CANNON_BREAK_STYLE_LABELS, group: 'cannon', sub: 'crack' },
+  { key: 'shatterDurationMs', label: '玻璃碎裂时长', type: 'range', min: 600, max: 2800, step: 100, suffix: 'ms', group: 'cannon', sub: 'crack', hint: '仅「玻璃碎裂 Shatter wipe」生效；2800ms 接近原版节奏' },
   { key: 'crackWidth', label: '粗细', type: 'range', min: 0.04, max: 0.3, step: 0.01, group: 'cannon', sub: 'crack' },
   { key: 'crackLength', label: '长短', type: 'range', min: 0.3, max: 2.5, step: 0.1, group: 'cannon', sub: 'crack' },
   { key: 'crackStartWidth', label: '起点宽度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'cannon', sub: 'crack' },
@@ -112,6 +122,7 @@ const ADV_FIELDS = [
   { key: 'sfxMachinegunHit', label: '弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
 
   // 黑洞 · 引力
+  { key: 'blackholeStyle', label: '视觉形态', type: 'select', options: BLACKHOLE_STYLES, labels: BLACKHOLE_STYLE_LABELS, group: 'blackhole', sub: 'gravity' },
   { key: 'blackholeRadius', label: '初始大小', type: 'range', min: 40, max: 400, step: 10, suffix: 'px', group: 'blackhole', sub: 'gravity' },
   { key: 'blackholeFieldRatio', label: '引力场', type: 'range', min: 0.1, max: 1, step: 0.05, suffix: '×R', group: 'blackhole', sub: 'gravity' },
   { key: 'blackholeCaptureRatio', label: '可吸面积比', type: 'range', min: 1, max: 3, step: 0.05, group: 'blackhole', sub: 'gravity' },

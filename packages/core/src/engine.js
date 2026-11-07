@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, SIZE_LEVELS } from './config.js';
+import { DEFAULT_CONFIG, SIZE_LEVELS, BLACKHOLE_STYLES, CANNON_BREAK_STYLES, BLADE_STYLES } from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
 import {
@@ -14,6 +14,8 @@ import {
   spawnDevourFragments,
   spawnTornDevour,
 } from './fragments.js';
+import { spawnShatterWipe } from './shatter.js';
+import { spawnSlashWipeFragments } from './slashwipe.js';
 import { piecesAt, getPiece } from './pieces.js';
 import { createSound } from './sound.js';
 import { WEAPONS, getWeapon, blastSamplePoints } from './weapons.js';
@@ -28,6 +30,8 @@ import {
   drawChambers,
   drawMuzzleFlash,
   drawBlackholes,
+  drawShatterWipes,
+  drawSlashWipes,
 } from './render.js';
 
 const now = () => performance.now();
@@ -81,6 +85,8 @@ export function createCleaner(options) {
     muzzleFlash: null,
     tracers: [],
     blackholes: [],
+    shatterWipes: [],
+    slashWipes: [],
     blackholeCooldownUntil: 0,
     lastEatSfxAt: 0,
   };
@@ -205,11 +211,14 @@ export function createCleaner(options) {
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.25, alpha: 1 });
     state.shockwaves.push({ x: cx, y: cy, r: radius * 0.55, alpha: 0.65 });
 
-    for (const target of targets) {
+    // 玻璃碎裂每块都是完整 DOM 克隆：多目标同时命中时只让前两个走该形态，
+    // 其余回退经典放射裂纹，避免一炮生成几十个克隆节点
+    targets.forEach((target, index) => {
       holeDestroy(target, cx, cy, CONFIG.cannonRadius * CONFIG.blastHoleScale, {
         breakup: true,
+        shatter: index < 2,
       });
-    }
+    });
 
     if (!targets.length) {
       spawnSparks(
@@ -366,6 +375,8 @@ export function createCleaner(options) {
       const gain = Number.isFinite(eff) ? Math.max(0, Math.min(1, eff)) : 0.01;
       const grown = Math.min(holeAreaOf(blackholeMaxRadius()), holeArea + targetArea * gain);
       hole.radius = Math.max(1, Math.sqrt(grown / Math.PI));
+      // 2D 版吞噬脉冲环的时间戳；3D 版不读这个字段，无副作用
+      hole.pulseAt = now();
 
       // 一次吸进多个元素时别把吞噬音叠成一坨
       const t = now();
@@ -676,7 +687,22 @@ export function createCleaner(options) {
       state.undoStack.push(record);
       if (state.undoStack.length > 20) state.undoStack.shift();
 
-      spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
+      // 白热刃口 Slash wipe：可选的刀斩击形态，生成失败时回退到经典两半散开
+      let slashFx = null;
+      if (CONFIG.bladeStyle === 'slash') {
+        slashFx = spawnSlashWipeFragments(el, rect, entryPoint, dir, {
+          durationMs: CONFIG.bladeFxDurationMs,
+          hitStop: CONFIG.hitStop,
+        });
+        if (slashFx) {
+          // 连续快速挥砍时只保留最近三个叠加层，避免刀线与火花堆满画布
+          if (state.slashWipes.length >= 3) state.slashWipes.shift();
+          state.slashWipes.push({ ...slashFx, t0: now() });
+        }
+      }
+      if (!slashFx) {
+        spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
+      }
       spawnSparks(state.particles, rect, hitPoint, dir);
       sound.play('bladeCut');
 
@@ -716,39 +742,56 @@ export function createCleaner(options) {
       const hole = Math.min(holeRadius, Math.max(rect.width, rect.height) * 0.75);
 
       if (options && options.breakup) {
-        // 炮：裂缝先不规则生长（带转折与分叉），长完再碎块崩开
-        const started = spawnBlastCracks(el, rect, cx, cy, {
-          holeRadius: hole,
-          hitStop: CONFIG.hitStop,
-          stepBase: Math.max(70, CONFIG.cutStepBase * 0.7),
-          stepDecay: CONFIG.cutStepDecay,
-          stepMin: CONFIG.cutStepMin,
-          onCrack: () => sound.play('cannonCrack'),
-          onDone: () => {
-            const ok = spawnBlastBreakup(el, rect, cx, cy, {
-              holeRadius: hole,
-              hitStop: 0,
-              stepBase: Math.max(50, CONFIG.cutStepBase * 0.5),
-              stepDecay: CONFIG.cutStepDecay,
-              stepMin: 30,
-              onCrack: () => sound.play('cannonCrack'),
-              onBurst: () => sound.play('cannonBreak'),
-            });
-            if (!ok) sound.play('cannonBreak');
-          },
-        });
+        // 玻璃碎裂（Shatter wipe）：可选的炮破碎形态。生成失败时回退到经典放射裂纹
+        let handled = false;
+        if (CONFIG.cannonBreakStyle === 'shatter' && !(options && options.shatter === false)) {
+          const durationMs = Math.max(400, Math.min(4000, Number(CONFIG.shatterDurationMs) || 1400));
+          const pattern = spawnShatterWipe(el, rect, cx, cy, { durationMs, holeRadius: hole });
+          if (pattern) {
+            handled = true;
+            // 一炮命中多个目标时只保留最近两个叠加层，避免裂纹与闪光成倍堆积
+            if (state.shatterWipes.length >= 2) state.shatterWipes.shift();
+            state.shatterWipes.push({ ...pattern, t0: now() });
+            setTimeout(() => sound.play('cannonCrack'), durationMs * 0.16);
+            setTimeout(() => sound.play('cannonBreak'), durationMs * 0.42);
+          }
+        }
 
-        if (!started) {
-          spawnBlastHole(el, rect, cx, cy, {
+        if (!handled) {
+          // 炮：裂缝先不规则生长（带转折与分叉），长完再碎块崩开
+          const started = spawnBlastCracks(el, rect, cx, cy, {
             holeRadius: hole,
             hitStop: CONFIG.hitStop,
-            holdMs: CONFIG.blastHoleHold,
-            crackWidth: CONFIG.crackWidth,
-            crackLength: CONFIG.crackLength,
-            crackStartWidth: CONFIG.crackStartWidth,
-            crackEndWidth: CONFIG.crackEndWidth,
+            stepBase: Math.max(70, CONFIG.cutStepBase * 0.7),
+            stepDecay: CONFIG.cutStepDecay,
+            stepMin: CONFIG.cutStepMin,
+            onCrack: () => sound.play('cannonCrack'),
+            onDone: () => {
+              const ok = spawnBlastBreakup(el, rect, cx, cy, {
+                holeRadius: hole,
+                hitStop: 0,
+                stepBase: Math.max(50, CONFIG.cutStepBase * 0.5),
+                stepDecay: CONFIG.cutStepDecay,
+                stepMin: 30,
+                onCrack: () => sound.play('cannonCrack'),
+                onBurst: () => sound.play('cannonBreak'),
+              });
+              if (!ok) sound.play('cannonBreak');
+            },
           });
-          sound.play('cannonBreak');
+
+          if (!started) {
+            spawnBlastHole(el, rect, cx, cy, {
+              holeRadius: hole,
+              hitStop: CONFIG.hitStop,
+              holdMs: CONFIG.blastHoleHold,
+              crackWidth: CONFIG.crackWidth,
+              crackLength: CONFIG.crackLength,
+              crackStartWidth: CONFIG.crackStartWidth,
+              crackEndWidth: CONFIG.crackEndWidth,
+            });
+            sound.play('cannonBreak');
+          }
         }
       } else {
         spawnBlastHole(el, rect, cx, cy, {
@@ -1189,8 +1232,10 @@ export function createCleaner(options) {
     stepBlackholes();
 
     drawTargetBoxes(ctx, state);
-    drawBlackholes(ctx, state);
-    drawEffects(ctx, state);
+    drawBlackholes(ctx, state, CONFIG);
+    drawEffects(ctx, state, CONFIG);
+    drawShatterWipes(ctx, state);
+    drawSlashWipes(ctx, state);
     drawTrail(ctx, state, CONFIG);
     updateParticles(ctx, state, (type) => sound.play(type));
     drawFiringGuide(ctx, state);
@@ -1280,6 +1325,8 @@ export function createCleaner(options) {
     state.trail = [];
     state.flashes = [];
     state.particles = [];
+    state.shatterWipes = [];
+    state.slashWipes = [];
     state.prevPoint = null;
     state.closeBtn = null;
   }
@@ -1397,6 +1444,15 @@ export function createCleaner(options) {
       const value = patch[key];
       if (key === 'targetSizeLevel') {
         if (SIZE_LEVELS.indexOf(value) === -1) continue;
+      }
+      if (key === 'blackholeStyle') {
+        if (BLACKHOLE_STYLES.indexOf(value) === -1) continue;
+      }
+      if (key === 'cannonBreakStyle') {
+        if (CANNON_BREAK_STYLES.indexOf(value) === -1) continue;
+      }
+      if (key === 'bladeStyle') {
+        if (BLADE_STYLES.indexOf(value) === -1) continue;
       }
       // 换武器统一走 setWeapon：补弹仓、收掉残留黑洞都在这条路径上
       if (key === 'weapon') {

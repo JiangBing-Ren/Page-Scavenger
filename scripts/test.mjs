@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { getSplitPolygons, polygonArea, signedArea, ensureWinding } from '../packages/core/src/geometry.js';
 import { visibleBox } from '../packages/core/src/fragments.js';
-import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS } from '../packages/core/src/config.js';
+import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS, CANNON_BREAK_STYLES, BLADE_STYLES } from '../packages/core/src/config.js';
 import {
   basePointsForArea,
   comboMultiplier,
@@ -20,6 +20,9 @@ import {
 import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore.js';
 import { splitPolygon, splitPolygonMany } from '../packages/core/src/pieces.js';
 import { WEAPONS, getWeapon, implementedWeapons, blastSamplePoints } from '../packages/core/src/weapons.js';
+import { drawBlackholes, drawShatterWipes, drawSlashWipes, renderSlashWipeTrail } from '../packages/core/src/render.js';
+import { buildShatterPattern, SHATTER_IMPACT, SHATTER_BURST } from '../packages/core/src/shatter.js';
+import { buildSlashPattern, SLASH_EDGE_END, SLASH_SLIP, SLASH_SPLIT } from '../packages/core/src/slashwipe.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -622,6 +625,181 @@ await check('遮罩挖空依赖绕向：洞必须与外框反向', () => {
 
   const b = ensureWinding(hole.slice().reverse(), true);
   assert.ok(signedArea(b) < 0, '反向输入也要归一化到负号');
+});
+
+console.log('\n[11] 黑洞视觉形态');
+
+await check('3D / 2D 两套渲染可切换且缺省为 3D', () => {
+  const calls = [];
+  // 只记录绘制调用：3D 版用 ellipse 画倾斜吸积盘，2D 版只用 lineTo 画漩涡臂
+  const ctx = new Proxy({}, {
+    get(_t, key) {
+      if (key === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => calls.push(key);
+    },
+    set() { return true; },
+  });
+  const state = { blackholes: [{ x: 100, y: 100, radius: 80, pulseAt: 0 }] };
+  const run = (config) => {
+    calls.length = 0;
+    drawBlackholes(ctx, state, config);
+    return {
+      ellipse: calls.filter((c) => c === 'ellipse').length,
+      lineTo: calls.filter((c) => c === 'lineTo').length,
+    };
+  };
+
+  const disk = run({ blackholeStyle: '3d' });
+  const flat = run({ blackholeStyle: '2d' });
+  const fallback = run(undefined);
+
+  assert.ok(disk.ellipse > 0, '3D 版应画出椭圆吸积盘');
+  assert.equal(flat.ellipse, 0, '2D 版不应画椭圆盘');
+  assert.ok(flat.lineTo > disk.lineTo, '2D 版应画出三臂漩涡');
+  assert.equal(fallback.ellipse, disk.ellipse, '缺省配置必须回到 3D 版');
+});
+
+console.log('\n[12] 炮破碎形态');
+
+await check('破碎形态与时长默认值', () => {
+  assert.equal(DEFAULT_CONFIG.cannonBreakStyle, 'classic', '默认必须保持经典放射裂纹');
+  assert.equal(DEFAULT_CONFIG.shatterDurationMs, 1400);
+  assert.deepEqual(CANNON_BREAK_STYLES, ['classic', 'shatter']);
+});
+
+await check('Shatter wipe 楔形网格、裂纹时序与叠加层', () => {
+  // 确定性随机源，保证校验结果可复现
+  const R = { range: (a, b) => (a + b) / 2, chance: () => true, sign: () => 1 };
+  const pat = buildShatterPattern(300, 250, 150, 120, R);
+
+  assert.ok(pat.cells.length > 0 && pat.cells.length <= 16, `碎片数越界：${pat.cells.length}`);
+  assert.ok(pat.cells.every((c) => c.pts.length >= 3), '每块碎片必须是多边形');
+  assert.ok(pat.cells.every((c) => c.tb >= SHATTER_BURST), '碎裂不得早于炸裂时刻');
+  assert.ok(pat.cracks.length > 0 && pat.cracks.length < 240, '裂纹数必须保持轻量');
+  const branches = pat.cracks.filter((c) => c.branch).length;
+  assert.ok(branches > 0, '主裂纹必须派生分叉，不能退化成直线');
+  assert.ok(branches < pat.cracks.length, '分叉不能取代主裂纹');
+  assert.ok(
+    pat.cracks.every((c) =>
+      [c.ax, c.bx].every((x) => x >= 0 && x <= 300) && [c.ay, c.by].every((y) => y >= 0 && y <= 250)
+    ),
+    '裂纹不得越出目标矩形'
+  );
+  assert.ok(pat.cracks.every((c, i) => i === 0 || pat.cracks[i - 1].t0 <= c.t0), '裂纹必须按 t0 升序');
+  assert.ok(
+    pat.cracks.every((c) => c.t0 >= SHATTER_IMPACT && c.t0 <= SHATTER_BURST),
+    '裂纹时刻必须落在撞击与炸裂之间'
+  );
+
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(_t, key) {
+      if (key === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => calls.push(key);
+    },
+    set() { return true; },
+  });
+  const state = {
+    shatterWipes: [{
+      x: 250,
+      y: 225,
+      t0: performance.now() - 700,
+      durationMs: 1400,
+      impact: SHATTER_IMPACT,
+      burst: SHATTER_BURST,
+      left: 100,
+      top: 100,
+      width: 300,
+      height: 250,
+      hole: [[220, 225], [250, 195], [280, 225], [250, 255]],
+      cracks: pat.cracks.map((c) => ({ ...c })),
+    }],
+  };
+
+  drawShatterWipes(ctx, state);
+  const strokes = calls.filter((k) => k === 'stroke').length;
+  assert.ok(strokes > 0, '裂纹层应画出线段');
+  assert.ok(strokes <= 6, `裂纹必须批量绘制，实际 stroke ${strokes} 次`);
+  assert.ok(calls.filter((k) => k === 'clip').length > 0, '裂纹层必须裁剪到目标矩形');
+  assert.ok(calls.filter((k) => k === 'closePath').length > 0, '弹孔必须使用 evenodd 复合裁剪');
+  assert.equal(
+    calls.filter((k) => k === 'save').length,
+    calls.filter((k) => k === 'restore').length,
+    'canvas 状态必须配对'
+  );
+  assert.equal(state.shatterWipes.length, 1, '未到期的特效不应被移除');
+
+  state.shatterWipes[0].t0 = performance.now() - 1500;
+  drawShatterWipes(ctx, state);
+  assert.equal(state.shatterWipes.length, 0, '到期的特效应被清理');
+});
+
+console.log('\n[13] 刀斩击形态');
+
+await check('斩击形态与序列时长默认值', () => {
+  assert.equal(DEFAULT_CONFIG.bladeStyle, 'classic', '默认必须保持经典蓝白刀光');
+  assert.equal(DEFAULT_CONFIG.bladeFxDurationMs, 420);
+  assert.deepEqual(BLADE_STYLES, ['classic', 'slash']);
+});
+
+await check('Slash wipe 刀线几何、时间轴与叠加层', () => {
+  const pat = buildSlashPattern(300, 250, { x: 150, y: 120 }, { x: 1, y: 0.55 });
+  assert.ok(pat.length > 0, '刀线长度必须为正');
+  assert.ok(
+    [pat.A, pat.B].every((pt) => pt[0] >= -1e-6 && pt[0] <= 300 + 1e-6 && pt[1] >= -1e-6 && pt[1] <= 250 + 1e-6),
+    '刀线端点必须落在目标内'
+  );
+  assert.ok(Math.abs(pat.nx * pat.ux + pat.ny * pat.uy) < 1e-6, '法线必须垂直于刀线');
+  assert.ok(SLASH_EDGE_END < SLASH_SLIP && SLASH_SLIP < SLASH_SPLIT, '时间轴必须递增');
+
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(_t, key) {
+      if (key === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => calls.push(key);
+    },
+    set() { return true; },
+  });
+  const state = {
+    slashWipes: [{
+      a: [100, 190],
+      b: [400, 280],
+      ux: 0.88,
+      uy: 0.48,
+      nx: -0.48,
+      ny: 0.88,
+      length: 313,
+      durationMs: 600,
+      hitStop: 40,
+      edgeEnd: SLASH_EDGE_END,
+      slip: SLASH_SLIP,
+      split: SLASH_SPLIT,
+      left: 100,
+      top: 100,
+      width: 300,
+      height: 250,
+      t0: performance.now() - 300,
+    }],
+  };
+
+  drawSlashWipes(ctx, state);
+  const strokes = calls.filter((k) => k === 'stroke').length;
+  assert.ok(strokes > 0 && strokes <= 8, `特效应批量绘制，实际 stroke ${strokes} 次`);
+  assert.ok(calls.filter((k) => k === 'clip').length > 0, '特效必须裁剪到目标矩形');
+  assert.equal(
+    calls.filter((k) => k === 'save').length,
+    calls.filter((k) => k === 'restore').length,
+    'canvas 状态必须配对'
+  );
+  assert.equal(state.slashWipes.length, 1, '未到期的特效不应被移除');
+
+  state.slashWipes[0].t0 = performance.now() - 700;
+  drawSlashWipes(ctx, state);
+  assert.equal(state.slashWipes.length, 0, '到期的特效应被清理');
+
+  calls.length = 0;
+  renderSlashWipeTrail(ctx, [{ x: 0, y: 0 }, { x: 40, y: 20 }, { x: 90, y: 50 }], 14, 0.8);
+  assert.ok(calls.filter((k) => k === 'stroke').length > 0, '白热轨迹应画出核心线');
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

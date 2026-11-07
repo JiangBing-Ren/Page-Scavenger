@@ -225,7 +225,9 @@ packages/
     targeting.js   目标判定与挡位搜索
     geometry.js    刀线切分（多边形裁剪）
     fragments.js   碎片克隆、分离、火花
-    render.js      刀光、高亮框、粒子、退出按钮
+    render.js      刀光、高亮框、粒子、退出按钮、黑洞与裂纹叠加层
+    shatter.js     炮的玻璃碎裂：Shatter wipe 楔形碎片与时序裂纹
+    slashwipe.js   刀的白热刃口：Slash wipe 两半分离与火花
     sound.js       音效：采样优先 + Web Audio 合成兜底
     assets/        音效采样（mp3，构建时整目录拷到各宿主）
     engine.js      状态机、指针事件、渲染循环

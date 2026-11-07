@@ -1,5 +1,187 @@
 const now = () => performance.now();
 
+const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+
+// Slash wipe 风格的刀光：冷蓝冷却带 + 点状残迹 + 白热核心 + 刀尖亮点。
+// 签名与 renderMultiLayerTrail 一致，便于按 bladeStyle 直接替换。
+export function renderSlashWipeTrail(ctx, points, maxWidth, alpha) {
+  if (!points || points.length < 2 || alpha <= 0) return;
+  const len = points.length;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // 冷却带：越靠刀尖越宽的冷蓝锥形拖尾
+  const left = [];
+  const right = [];
+  for (let i = 0; i < len; i++) {
+    const p = points[i];
+    const prev = points[Math.max(0, i - 1)];
+    const next = points[Math.min(len - 1, i + 1)];
+    const dx = next.x - prev.x;
+    const dy = next.y - prev.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const nx = -dy / d;
+    const ny = dx / d;
+    const w = maxWidth * Math.pow(i / (len - 1), 1.3) * alpha;
+    left.push({ x: p.x + nx * w, y: p.y + ny * w });
+    right.push({ x: p.x - nx * w, y: p.y - ny * w });
+  }
+  const poly = [...left, ...right.reverse()];
+  ctx.fillStyle = `rgba(98, 200, 244, ${(alpha * 0.28).toFixed(3)})`;
+  ctx.beginPath();
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+  ctx.closePath();
+  ctx.fill();
+
+  // 点状残迹：轨迹后方留下的冷蓝小点
+  ctx.fillStyle = `rgba(184, 201, 232, ${(alpha * 0.55).toFixed(3)})`;
+  ctx.beginPath();
+  for (let i = 0; i < len; i += 3) {
+    const p = points[i];
+    ctx.moveTo(p.x + 1.2, p.y);
+    ctx.arc(p.x, p.y, 1.2, 0, Math.PI * 2);
+  }
+  ctx.fill();
+
+  // 白热核心与刀尖
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(alpha * 0.95).toFixed(3)})`;
+  ctx.lineWidth = Math.max(1.2, maxWidth * 0.1);
+  ctx.beginPath();
+  for (let i = 0; i < len; i++) {
+    if (i === 0) ctx.moveTo(points[i].x, points[i].y);
+    else ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.stroke();
+
+  const tip = points[len - 1];
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, 2.4 * alpha, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Slash wipe 命中特效：刃口白热扫过、暖色火花喷泉、切口白热→冷蓝亮带。
+// 数据由 slashwipe.js 生成，时间轴为归一化 u∈[0,1]；全部裁剪在目标矩形内。
+export function drawSlashWipes(ctx, state) {
+  const list = state.slashWipes;
+  if (!list || !list.length) return;
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    const fx = list[i];
+    const u = (now() - fx.t0) / fx.durationMs;
+    if (u < 0) continue;
+    if (u >= 1) {
+      list.splice(i, 1);
+      continue;
+    }
+
+    const [ax, ay] = fx.a;
+    const [bx, by] = fx.b;
+    const headAt = (k) => [ax + (bx - ax) * k, ay + (by - ay) * k];
+    const hasBox = [fx.left, fx.top, fx.width, fx.height].every(Number.isFinite);
+    // 确定性伪随机：同一刀线的火花不会逐帧跳动
+    const rand = (n) => {
+      const v = Math.sin(n * 12.9898 + fx.length * 0.017) * 43758.5453;
+      return v - Math.floor(v);
+    };
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    if (hasBox) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(fx.left, fx.top, fx.width, fx.height);
+      ctx.clip();
+    }
+
+    // 1) 白热刃口：冷却带 + 白核心 + 身后的点状残迹
+    if (u < fx.edgeEnd + 0.22) {
+      const k = easeOutCubic(Math.min(1, u / fx.edgeEnd));
+      const [hx, hy] = headAt(k);
+      const [tx, ty] = headAt(Math.max(0, k - 0.35));
+
+      ctx.strokeStyle = `rgba(58, 139, 216, ${(0.55 * (1 - u)).toFixed(3)})`;
+      ctx.lineWidth = 9 * (1 - u * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(255, 255, 255, ${(0.95 * (1 - u * 0.6)).toFixed(3)})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(hx, hy);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(184, 201, 232, ${(0.6 * (1 - u)).toFixed(3)})`;
+      ctx.beginPath();
+      for (let d = 0.05; d < k; d += 0.07) {
+        const [px, py] = headAt(d);
+        ctx.moveTo(px + 1.3, py);
+        ctx.arc(px, py, 1.3, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+
+    // 2) 暖色火花喷泉：沿刃口走过的部分向后喷，按颜色合并成两组批量描边
+    if (u < fx.slip + 0.15) {
+      const fly = Math.min(1, u / (fx.slip + 0.15));
+      const groups = [
+        { rgb: '255, 226, 107', a: 0.9, segs: [] },
+        { rgb: '242, 86, 29', a: 0.7, segs: [] },
+      ];
+      const reach = Math.min(1, u / fx.edgeEnd);
+      for (let s = 0; s < 14; s++) {
+        const [px, py] = headAt(rand(s) * reach);
+        const ang = Math.atan2(-fx.uy, -fx.ux) + (rand(s + 40) - 0.5) * 1.6;
+        const dist = 6 + fly * (18 + rand(s + 80) * 26);
+        groups[s % 2].segs.push([
+          px, py,
+          px + Math.cos(ang) * dist,
+          py + Math.sin(ang) * dist + fly * fly * 14,
+        ]);
+      }
+      for (const g of groups) {
+        if (!g.segs.length) continue;
+        ctx.strokeStyle = `rgba(${g.rgb}, ${(g.a * (1 - fly)).toFixed(3)})`;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        for (const [x0, y0, x1, y1] of g.segs) {
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // 3) 切口亮带：两半沿法线分开时，边缘从白热冷却到冷蓝
+    if (u >= fx.slip) {
+      const su = Math.max(0, u - fx.split);
+      const sep = (0.02 + 0.25 * su + 0.7 * su * su) * Math.min(fx.width, fx.height);
+      const heat = Math.max(0, 1 - (u - fx.slip) / 0.4);
+      const rgb = heat > 0.5 ? '255, 255, 255' : heat > 0.2 ? '184, 201, 232' : '98, 200, 244';
+      ctx.strokeStyle = `rgba(${rgb}, ${(0.3 + 0.6 * heat).toFixed(3)})`;
+      ctx.lineWidth = 1.6 + 2.2 * heat;
+      ctx.beginPath();
+      for (const s of [1, -1]) {
+        const ox = s * fx.nx * sep;
+        const oy = s * fx.ny * sep;
+        ctx.moveTo(ax + ox, ay + oy);
+        ctx.lineTo(bx + ox, by + oy);
+      }
+      ctx.stroke();
+    }
+
+    if (hasBox) ctx.restore();
+    ctx.restore();
+  }
+}
+
 // 刀光：一条前细后粗的多边形带 + 靠近刀尖的高亮 + 一条细的中轴线
 export function renderMultiLayerTrail(ctx, points, maxWidth, alpha) {
   if (!points || points.length < 2) return;
@@ -77,7 +259,8 @@ export function renderMultiLayerTrail(ctx, points, maxWidth, alpha) {
   ctx.stroke();
 }
 
-export function drawEffects(ctx, state) {
+export function drawEffects(ctx, state, config) {
+  const trailDraw = config && config.bladeStyle === 'slash' ? renderSlashWipeTrail : renderMultiLayerTrail;
   for (let i = state.flashes.length - 1; i >= 0; i--) {
     const f = state.flashes[i];
 
@@ -88,7 +271,7 @@ export function drawEffects(ctx, state) {
     }
 
     ctx.save();
-    renderMultiLayerTrail(ctx, f.trail, 22, f.alpha);
+    trailDraw(ctx, f.trail, 22, f.alpha);
 
     if (f.hitPoint) {
       ctx.fillStyle = `rgba(255, 255, 255, ${f.alpha})`;
@@ -292,7 +475,8 @@ export function drawTrail(ctx, state, config) {
 
   ctx.save();
   const life = 1 - (tNow - t[0].t) / config.trailLifeMs;
-  renderMultiLayerTrail(ctx, validPts, 14, Math.max(0, life));
+  const trailDraw = config && config.bladeStyle === 'slash' ? renderSlashWipeTrail : renderMultiLayerTrail;
+  trailDraw(ctx, validPts, 14, Math.max(0, life));
   ctx.restore();
 }
 
@@ -687,9 +871,9 @@ function drawLensed(ctx, cx, cy, R, t) {
   ctx.restore();
 }
 
-// 黑洞：倾斜差速吸积盘 + 引力透镜弧 + 事件视界 + 光子环 + 外沿吸附丝 + 剩余时间细弧。
+// 3D 版黑洞：倾斜差速吸积盘 + 引力透镜弧 + 事件视界 + 光子环 + 外沿吸附丝 + 剩余时间细弧。
 // 只用暗色与低饱和冷色，避免整屏闪烁。
-export function drawBlackholes(ctx, state) {
+function drawBlackholesDisk(ctx, state) {
   const hole = state.blackholes && state.blackholes[0];
   if (!hole) return;
 
@@ -784,3 +968,322 @@ export function drawBlackholes(ctx, state) {
 
   ctx.restore();
 }
+
+// 2D 版黑洞（参考 pixelfx 的 void-orb，MIT）：三臂漩涡 + 爱因斯坦环 + 爬行亮边。
+// 漩涡收在 1.5R 的引力场以内，看到的范围就是能吸到的范围。
+const VOID_ARMS = 3;
+
+function drawVortex(ctx, cx, cy, R, t) {
+  const inner = R * 1.14;
+  const outer = R * 1.44;
+  const spin = t / 1100;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+
+  for (let arm = 0; arm < VOID_ARMS; arm++) {
+    const base = (arm / VOID_ARMS) * Math.PI * 2;
+    const pts = [];
+    for (let i = 0; i <= 26; i++) {
+      const u = i / 26;
+      const r = outer - (outer - inner) * u;
+      // 绕两圈多才读得出「卷入」，太少会像同心圆
+      const a = base + spin + u * 6.2;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+
+    // 尘带
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.strokeStyle = 'rgba(96, 76, 156, 0.24)';
+    ctx.lineWidth = Math.max(2, R * 0.07);
+    ctx.stroke();
+
+    // 亮丝：沿同一条臂向内流动的虚线
+    ctx.setLineDash([Math.max(2, R * 0.07), Math.max(2, R * 0.1)]);
+    ctx.lineDashOffset = -((t / 12) % (R * 0.17));
+    ctx.strokeStyle = 'rgba(198, 182, 255, 0.42)';
+    ctx.lineWidth = Math.max(1, R * 0.018);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // 被吸进去的尘点：越靠里转得越快
+  for (let i = 0; i < 8; i++) {
+    const seed = (i * 0.618) % 1;
+    const u = (t / 1600 + seed) % 1;
+    const r = outer - (outer - inner) * u;
+    const a = seed * Math.PI * 2 + spin + u * 3.4;
+    const alpha = Math.min(1, u * 3) * (1 - u * 0.75);
+    ctx.fillStyle = `rgba(242, 238, 255, ${alpha.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.max(1, R * 0.016), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// 光绕过洞口的爱因斯坦环：三段不同速度的弧，吞噬时整体更亮
+function drawEinsteinRing(ctx, cx, cy, R, t, gulp) {
+  for (let k = 0; k < 3; k++) {
+    const rr = R * (1.08 + k * 0.025);
+    const start = (t / (1400 + k * 600)) * (k % 2 ? -1 : 1);
+    ctx.strokeStyle = `rgba(214, 204, 255, ${(0.3 - k * 0.07 + gulp * 0.2).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, R * (0.02 - k * 0.004));
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, start, start + Math.PI * (0.6 + k * 0.2));
+    ctx.stroke();
+  }
+}
+
+// 2D 版主体：平面奇点 + 三臂漩涡 + 爱因斯坦环 + 吞噬脉冲环 + 剩余时间细弧。
+// 只用暗色与低饱和冷色，避免整屏闪烁。
+function drawBlackholesFlat(ctx, state) {
+  const hole = state.blackholes && state.blackholes[0];
+  if (!hole) return;
+
+  const t = now();
+  const R = hole.radius;
+  if (R < 1) return;
+
+  const span = hole.shrinkUntil ? Math.max(1, hole.shrinkUntil - hole.shrinkStart) : 0;
+  const shrink = span ? Math.min(1, Math.max(0, (t - hole.shrinkStart) / span)) : 0;
+  const pulse = 1 + Math.sin(t / 180) * 0.03;
+  const field = R * 1.5;
+
+  ctx.save();
+
+  // 引力场边界：很淡的虚线，说明能吸到哪
+  ctx.setLineDash([6, 8]);
+  ctx.strokeStyle = 'rgba(126, 112, 200, 0.22)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, field, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 外围光晕
+  const halo = ctx.createRadialGradient(hole.x, hole.y, R * 0.9, hole.x, hole.y, R * 2.4);
+  halo.addColorStop(0, 'rgba(118, 92, 210, 0.2)');
+  halo.addColorStop(0.55, 'rgba(66, 48, 132, 0.09)');
+  halo.addColorStop(1, 'rgba(18, 10, 36, 0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R * 2.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 吞噬脉冲：吃掉目标的一瞬间亮一下（engine 在成长处写 hole.pulseAt）
+  const gulp = hole.pulseAt ? Math.max(0, 1 - (t - hole.pulseAt) / 260) : 0;
+
+  // 三臂漩涡
+  drawVortex(ctx, hole.x, hole.y, R * pulse, t);
+
+  // 爱因斯坦环
+  drawEinsteinRing(ctx, hole.x, hole.y, R * pulse, t, gulp);
+
+  // 视界：柔软过渡再压成纯黑
+  const veil = ctx.createRadialGradient(hole.x, hole.y, R * 0.92, hole.x, hole.y, R * 1.1);
+  veil.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  veil.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = veil;
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R * 1.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 爬行亮边：两段不同速度的弧绕着洞沿转
+  for (let k = 0; k < 2; k++) {
+    const start = (t / (900 + k * 700)) * (k ? -1 : 1);
+    ctx.strokeStyle = k ? 'rgba(168, 148, 255, 0.5)' : 'rgba(238, 232, 255, 0.72)';
+    ctx.lineWidth = Math.max(1.2, R * (0.036 - k * 0.012));
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, R * 0.995, start, start + Math.PI * (1.3 - k * 0.45));
+    ctx.stroke();
+  }
+
+  // 光子柔光
+  ctx.strokeStyle = `rgba(160, 138, 255, ${(0.2 + gulp * 0.25).toFixed(3)})`;
+  ctx.lineWidth = Math.max(2, R * 0.06);
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 吞噬脉冲环
+  if (gulp > 0.02) {
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.45 * gulp).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, R * 0.05 * gulp);
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, R * (1 + (1 - gulp) * 0.5), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 寿命段：按住时画满圈，收束时逐渐收短
+  const left = hole.shrinkUntil ? 1 - shrink : 1;
+  ctx.strokeStyle = 'rgba(0, 255, 204, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, field * 1.06, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 唯一的绘制入口：按 blackholeStyle 分发。config 缺省时走 3D 版，兼容旧调用。
+export function drawBlackholes(ctx, state, config) {
+  if (config && config.blackholeStyle === '2d') drawBlackholesFlat(ctx, state);
+  else drawBlackholesDisk(ctx, state);
+}
+
+// 炮 · 玻璃碎裂（Shatter wipe）的 canvas 叠加层。
+// DOM 楔形碎片由 shatter.js 生成，这里补上像素效果里最标志性的部分：
+// 裂纹按距离「赛跑」向外推进、撞击白闪、炸裂冷闪与飞散的玻璃碎屑。
+// 时间轴是归一化的 u∈[0,1]，关键时刻由 spawnShatterWipe 随 pattern 一起返回，避免两处定义漂移。
+
+function shatterFlash(ctx, cx, cy, radius, rgb, alpha) {
+  if (radius <= 0 || alpha <= 0) return;
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  g.addColorStop(0, `rgba(${rgb}, ${alpha.toFixed(3)})`);
+  g.addColorStop(1, `rgba(${rgb}, 0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+export function drawShatterWipes(ctx, state) {
+  const list = state.shatterWipes;
+  if (!list || !list.length) return;
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    const fx = list[i];
+    const impact = Number.isFinite(fx.impact) ? fx.impact : 0.16;
+    const burst = Number.isFinite(fx.burst) ? fx.burst : 0.42;
+    const u = (now() - fx.t0) / fx.durationMs;
+    if (u >= 1 || u < 0) {
+      list.splice(i, 1);
+      continue;
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+
+    // 裂纹与碎屑只画在目标矩形内；闪光允许轻微溢出，但半径按目标尺寸限幅
+    const hasBox = [fx.left, fx.top, fx.width, fx.height].every(Number.isFinite);
+    const clipToTarget = () => {
+      if (!hasBox) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(fx.left, fx.top, fx.width, fx.height);
+      if (fx.hole && fx.hole.length > 2) {
+        // evenodd：矩形减去弹孔，挖空的洞内不画任何裂纹或碎屑
+        ctx.moveTo(fx.hole[0][0], fx.hole[0][1]);
+        for (let k = 1; k < fx.hole.length; k++) ctx.lineTo(fx.hole[k][0], fx.hole[k][1]);
+        ctx.closePath();
+        ctx.clip('evenodd');
+      } else {
+        ctx.clip();
+      }
+    };
+    const flashLimit = hasBox ? Math.max(24, Math.min(fx.width, fx.height) * 0.35) : 42;
+
+    // 撞击：白热核心 + 十字星芒，随后快速收掉
+    if (u >= impact && u < impact + 0.16) {
+      const k = 1 - (u - impact) / 0.16;
+      shatterFlash(ctx, fx.x, fx.y, flashLimit * (0.4 + k), '255, 255, 255', 0.85 * k);
+      shatterFlash(ctx, fx.x, fx.y, flashLimit * 0.38, '216, 244, 255', 0.7 * k);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${(0.9 * k).toFixed(3)})`;
+      ctx.lineWidth = 1.6;
+      const arm = flashLimit * 0.62 * (0.5 + k);
+      ctx.beginPath();
+      ctx.moveTo(fx.x - arm, fx.y);
+      ctx.lineTo(fx.x + arm, fx.y);
+      ctx.moveTo(fx.x, fx.y - arm);
+      ctx.lineTo(fx.x, fx.y + arm);
+      ctx.stroke();
+    }
+
+    // 裂纹赛跑：每条折线在 t0 抵达后逐段长出，尖端由白转冷蓝。
+    // 按颜色分组合并成一条 path，每帧只 stroke 数次，避免上百条线段各自 stroke。
+    if (u >= impact && u < burst + 0.3) {
+      const groups = [
+        { rgb: '255, 255, 255', alpha: 0.95, width: 1.8, segs: [] },
+        { rgb: '216, 244, 255', alpha: 0.85, width: 1.2, segs: [] },
+        { rgb: '88, 180, 236', alpha: 0.4, width: 1.0, segs: [] },
+      ];
+      for (const c of fx.cracks) {
+        if (c.t0 > u) break; // cracks 已按 t0 升序
+        const age = u - c.t0;
+        if (age > 0.34) continue;
+        const grow = Math.min(1, age / 0.05);
+        const ex = c.ax + (c.bx - c.ax) * grow;
+        const ey = c.ay + (c.by - c.ay) * grow;
+        const gi = age < 0.04 ? 0 : age < 0.18 ? 1 : 2;
+        groups[gi].segs.push([c.ax, c.ay, ex, ey]);
+      }
+
+      if (groups.some((g) => g.segs.length > 0)) {
+        clipToTarget();
+        // 暗影统一铺一层，裂纹才有「裂开」的厚度
+        ctx.strokeStyle = 'rgba(12, 20, 48, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (const g of groups) {
+          for (const [ax, ay, bx, by] of g.segs) {
+            ctx.moveTo(ax + 1, ay + 1);
+            ctx.lineTo(bx + 1, by + 1);
+          }
+        }
+        ctx.stroke();
+
+        for (const g of groups) {
+          if (!g.segs.length) continue;
+          ctx.strokeStyle = `rgba(${g.rgb}, ${g.alpha})`;
+          ctx.lineWidth = g.width;
+          ctx.beginPath();
+          for (const [ax, ay, bx, by] of g.segs) {
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(bx, by);
+          }
+          ctx.stroke();
+        }
+        if (hasBox) ctx.restore();
+      }
+    }
+
+    // 炸裂：一圈冷色冲击光，伴着从撞击点甩出的玻璃碎屑
+    if (u >= burst) {
+      const k = Math.max(0, 1 - (u - burst) / 0.28);
+      if (k > 0) {
+        shatterFlash(ctx, fx.x, fx.y, flashLimit * (0.8 + 0.6 * k), '88, 180, 236', 0.5 * k);
+        shatterFlash(ctx, fx.x, fx.y, flashLimit * 0.42, '255, 255, 255', 0.65 * k);
+      }
+      const fly = (u - burst) / (1 - burst);
+      if (fly < 0.75) {
+        const fade = 1 - fly / 0.75;
+        clipToTarget();
+        ctx.strokeStyle = `rgba(216, 244, 255, ${(0.6 * fade).toFixed(3)})`;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let s = 0; s < 14; s++) {
+          const a = (s / 14) * Math.PI * 2 + Math.sin(s * 7.13) * 0.3;
+          const dist = 12 + fly * (70 + (s % 5) * 26);
+          const x0 = fx.x + Math.cos(a) * dist;
+          const y0 = fx.y + Math.sin(a) * dist + fly * fly * 34;
+          const len = 3 + (s % 4) * 2;
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x0 + Math.cos(a) * len, y0 + Math.sin(a) * len + fly * 18);
+        }
+        ctx.stroke();
+        if (hasBox) ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }
+}
+

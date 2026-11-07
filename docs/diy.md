@@ -48,7 +48,7 @@
 
 ```bash
 node scripts/build.mjs   # 生成 dist/
-node scripts/test.mjs    # 41 项校验，改坏了这里会红
+node scripts/test.mjs    # 46 项校验，改坏了这里会红
 ```
 
 - 只需要 Node.js，不需要 `npm install`（桌面版除外）

@@ -118,7 +118,7 @@ scripts/                ← 构建、图标、测试；不放运行时逻辑
 
 ```bash
 node scripts/build.mjs   # 会先清空 dist/
-node scripts/test.mjs    # 41 项
+node scripts/test.mjs    # 46 项
 ```
 
 四条不能省：

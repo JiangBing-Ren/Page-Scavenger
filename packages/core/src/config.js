@@ -4,6 +4,10 @@ export const DEFAULT_CONFIG = {
   trailLength: 25,
   trailLifeMs: 160,
   sampleStep: 4,
+  // 刀的斩击形态：'classic' 蓝白刀光 + 直接散开（默认）/ 'slash' Slash wipe 白热刃口 + 两半滑开分离
+  bladeStyle: 'classic',
+  // Slash wipe 序列总时长（ms）。420 与现有挥砍节奏对齐，1700 接近 pixelfx 原版
+  bladeFxDurationMs: 420,
 
   // 切除后的隐藏方式：用 visibility 而非 display，避免页面重排
   hideProp: 'visibility',
@@ -52,6 +56,10 @@ export const DEFAULT_CONFIG = {
   // 炮：洞口半径系数（相对 cannonRadius）与主体停留时长（ms）
   blastHoleScale: 0.85,
   blastHoleHold: 620,
+  // 炮：破碎形态。'classic' 放射裂纹 + 扇形碎块（默认）/ 'shatter' 玻璃楔形碎裂
+  cannonBreakStyle: 'classic',
+  // 玻璃碎裂总时长（ms）。1400 与现有炮手感对齐，2800 接近 pixelfx 原版节奏
+  shatterDurationMs: 1400,
   // 炮：裂缝形态，宽度与长度都以洞口半径为基准
   crackWidth: 0.14,
   crackLength: 1,
@@ -69,6 +77,8 @@ export const DEFAULT_CONFIG = {
   machinegunCooldown: 90,
   machinegunSpread: 12,
   // 黑洞：点击放置奇点；长按模式下按住拖动，跟随光标吞吸
+  // 视觉形态：'3d' 倾斜差速吸积盘（默认）/ '2d' 平面 void-orb（备选）
+  blackholeStyle: '3d',
   blackholeRadius: 150,
   blackholeDurationMs: 2400,
   blackholeCooldown: 700,
@@ -119,6 +129,30 @@ export const SKIP_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION']);
 
 // 克隆碎片时无法渲染的元素，用同尺寸色块代替
 export const MEDIA_SELECTOR = 'iframe, video, canvas, object, embed';
+
+// 刀的斩击形态：classic 为原有蓝白刀光，slash 为移植自 pixelfx 的 Slash wipe
+export const BLADE_STYLES = ['classic', 'slash'];
+
+export const BLADE_STYLE_LABELS = {
+  classic: '蓝白刀光（默认）',
+  slash: '白热刃口 Slash wipe',
+};
+
+// 炮的破碎形态：classic 为原有放射裂纹，shatter 为移植自 pixelfx 的玻璃楔形碎裂
+export const CANNON_BREAK_STYLES = ['classic', 'shatter'];
+
+export const CANNON_BREAK_STYLE_LABELS = {
+  classic: '放射裂纹（默认）',
+  shatter: '玻璃碎裂 Shatter wipe',
+};
+
+// 黑洞视觉形态：两套渲染并存，运行时由 blackholeStyle 分发
+export const BLACKHOLE_STYLES = ['3d', '2d'];
+
+export const BLACKHOLE_STYLE_LABELS = {
+  '3d': '3D 吸积盘（默认）',
+  '2d': '2D 平面奇点',
+};
 
 export const SIZE_LEVELS = ['auto', 'balance', 'large', 'medium', 'small'];
 

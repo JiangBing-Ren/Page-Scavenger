@@ -76,7 +76,7 @@ electron_mirror=https://npmmirror.com/mirrors/electron/
 
 ```bash
 node scripts/build.mjs   # 生成 dist/
-node scripts/test.mjs    # 41 项校验：几何、参数、产物、manifest
+node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 ```
 
 构建会先清空 `dist/`。这一步是有意为之：残留的旧产物会替新产物兜底，导致「本地通过、CI 失败」。
@@ -141,14 +141,28 @@ node scripts/test.mjs    # 41 项校验：几何、参数、产物、manifest
 
 按住划动，贯穿后切断。切开的碎片会先露出 2px 缝、停顿 `hitStop` 毫秒，再向两侧飞散——这个停顿是手感的关键，不要随意归零。
 
+**斩击形态可切换**（`bladeStyle`：**配置面板 → 高级参数 → 刀 · 刀光 → 斩击形态**）。两种形态只改表现，贯穿判定、计分与连切完全一致：
+
+- **蓝白刀光（默认，`classic`）**：多层蓝白刀光 + 两半直接向两侧飞散。
+- **白热刃口 Slash wipe（`slash`）**：移植自 [pixelfx](https://github.com/patch-gg/pixelfx) 的 Slash wipe（MIT）。拖动轨迹与命中闪光改为冷蓝冷却带 + 点状残迹 + 白热核心；命中瞬间一道白热刃口沿真实刀线扫过，暖黄橙火花沿刃口向后喷；随后两半沿切线先错开、再沿法线分离并轻微旋转飞散，切口从白热冷却到冷蓝。`bladeFxDurationMs` 控制序列总长（默认 420ms，可在 200~1700ms 调整；1700ms 接近原版节奏）。
+
+  原版是全屏 1.7 秒过场（白热刀刃斜扫 → 第二道斜切 → 封面两半滑开）。本项目只移植到单次挥砍命中的元素：不做全屏封面、不做第二道反向斜切，刀线取玩家真实划动方向，目标仍按真实刀线切成两块。相关版权与 MIT 许可全文保留在 `packages/core/src/slashwipe.js` 头部。
+
 ### 4.2 炮
 
 点击处范围爆破。以点击点为圆心，用「圆心 + 8 个环点」采样收集半径内的目标（`blastSamplePoints`），避免遍历整棵 DOM。
 
-摧毁分两拍：
+默认形态下摧毁分两拍：
 
 1. `spawnBlastCracks`：3~4 条带转折与分叉的裂缝由慢到快逐段生长，每段重算遮罩
 2. `spawnBlastBreakup`：裂缝长完后把目标切成多块并逐块崩开
+
+**破碎形态可切换**（`cannonBreakStyle`：**配置面板 → 高级参数 → 炮 · 裂缝 → 破碎形态**）。两种形态只改摧毁表现，采样范围、计分与禁区判定完全一致：
+
+- **放射裂纹（默认，`classic`）**：即上面那两拍。
+- **玻璃碎裂 Shatter wipe（`shatter`）**：移植自 [pixelfx](https://github.com/patch-gg/pixelfx) 的 Shatter wipe（MIT）。弹着点保留炮的锯齿圆孔；9 条主裂纹按各自速度向外「赛跑」，每条是带弧度的折线并派生 1~2 条斜向短分叉，尖端由白热转冷蓝；随后长楔形玻璃碎片按离撞击点的距离依次炸开，绕面内轴 3D 翻滚下落。`shatterDurationMs` 控制总时长（默认 1400ms，可在 600~2800ms 调整；2800ms 接近原版节奏）。
+
+  原版是全屏像素 frame buffer 上的 2.8 秒过场（暗玻璃板落下、弹跳两次再撞击，13 射线 × 9 环网格）。本项目只移植到局部 DOM 元素破碎：不做全屏玻璃板，撞击点取实际弹着点；只留 1 圈稀疏中环、不给每块碎片描亮边，避免整张网格读成蜘蛛网；分叉不会闭合成环，所以不会退回网状。弹孔用与 DOM 遮罩同一个锯齿多边形在 canvas 上做 `evenodd` 复合裁剪，洞内不画任何裂纹或碎屑。碎片上限 16 块（每块都是完整 DOM 克隆），canvas 按颜色批量描边且逐帧不改滤镜。相关版权与 MIT 许可全文保留在 `packages/core/src/shatter.js` 头部。
 
 炮是范围武器，**范围内的禁区也会被一起炸掉并扣分**，这是设计意图而不是 bug。
 
@@ -174,7 +188,10 @@ node scripts/test.mjs    # 41 项校验：几何、参数、产物、manifest
 
 撕裂用的是**裂隙粉碎**而不是刀的直线切割：碎块由多条从撕裂源出发的裂纹切出，每块先被扯开几像素的缝，随后由近及远螺旋收进洞心，近的先走、远的慢半拍，读起来像被牵引而不是整体平移；越靠近洞心，碎块被提亮到接近白色（白热化）再消失。每块面积约为黑洞面积的 0.7 倍（`blackholeTearRatio`），最多 12 块。
 
-视觉上是一个倾斜的吸积盘：四层椭圆环带，内圈更快更亮、外圈慢而暗，远侧盘面被引力弯折到洞顶、洞底还有一道细弱的次级像；视界是纯黑圆，边缘一圈光子环，最外面那圈淡虚线就是引力场范围。做法参考了 [pixelfx](https://github.com/patch-gg/pixelfx) 的 black-hole（MIT）在差速与透镜上的处理。
+视觉形态在配置面板里可选两套（`blackholeStyle`：**配置面板 → 高级参数 → 黑洞 · 引力 → 视觉形态**）。两套只改 `render.js` 的绘制，引力场、撕裂、成长等判定完全一致，可随时切换、即时生效：
+
+- **3D 吸积盘（默认，`3d`）**：倾斜的吸积盘——四层椭圆环带，内圈更快更亮、外圈慢而暗，远侧盘面被引力弯折到洞顶、洞底还有一道细弱的次级像；视界是纯黑圆，边缘一圈光子环，最外面那圈淡虚线就是引力场范围。做法参考了 [pixelfx](https://github.com/patch-gg/pixelfx) 的 black-hole（MIT）在差速与透镜上的处理。
+- **2D 平面奇点（备选，`2d`）**：正面平视的平面奇点——纯黑球体，洞沿有两段不同速度的亮弧在爬行；外面是三臂漩涡，每条臂由一条尘带和一条向内流动的亮丝组成，越靠里转得越快；再往外是爱因斯坦环与光子柔光。每吞下一个目标，洞沿亮一下并荡出一圈脉冲环。做法参考了 [pixelfx](https://github.com/patch-gg/pixelfx) 的 void-orb（MIT）。
 
 每吞下一个目标，黑洞按**吸入面积的 1%**（`blackholeGrowEfficiency`）长大，面积上限是可视区域面积的 67%（`blackholeMaxAreaRatio`）。这个值调大一点半径就涨得很快，默认 0.01 是实机校准出来的。
 
@@ -272,12 +289,12 @@ node scripts/test.mjs    # 41 项校验：几何、参数、产物、manifest
 
 - **刀 · 多刀**：单目标最多刀数、叠刀间距、逐刀起始间隔/递减系数/最小间隔
 - **刀 · 判定**：向上搜索深度、目标尺寸上限、贯穿判定比例、采样步长
-- **刀 · 刀光**：采样点数、轨迹长度、存活时间
+- **刀 · 刀光**：斩击形态（蓝白刀光 / 白热刃口 Slash wipe）、白热序列时长、采样点数、轨迹长度、存活时间
 - **炮 · 爆破**：爆破半径、开火间隔、洞口大小与停留
-- **炮 · 裂缝**：粗细、长短、起点宽度、末端宽度
+- **炮 · 裂缝**：破碎形态（放射裂纹 / 玻璃碎裂 Shatter wipe）、玻璃碎裂时长、粗细、长短、起点宽度、末端宽度
 - **左轮 · 射击与弹仓**：弹孔大小、射击间隔、弹仓容量、换弹时间、抛壳开关
 - **机枪 · 射击**：弹孔大小、射速间隔、散布、枪口火光
-- **黑洞 · 引力**：初始大小、引力场、可吸面积比、放置间隔、存活时长
+- **黑洞 · 引力**：视觉形态（3D 吸积盘 / 2D 平面奇点）、初始大小、引力场、可吸面积比、放置间隔、存活时长
 - **黑洞 · 吞噬**：撕裂阈值、成长效率、面积上限
 - **各武器 · 音效**：对应效果的 0~2 倍率
 
@@ -384,7 +401,9 @@ packages/
     weapons.js     11 种武器注册表
     fragments.js   切分、爆破碎块、裂缝、烟雾、弹壳
     pieces.js      碎片注册表与坐标变换（支持连切）
-    render.js      刀光、爆痕、枪焰、弹仓、弹壳绘制
+    render.js      刀光、爆痕、枪焰、弹仓、弹壳、黑洞与裂纹叠加层
+    shatter.js     Shatter wipe：楔形网格、时序裂纹、玻璃碎片动画
+    slashwipe.js   Slash wipe：白热刀线、两半滑开分离、火花与切口亮带
     sound.js       15 个命名音效（采样优先 + 合成兜底）
     assets/        音效采样
     score.js / freescore.js  关卡计分 / 自由模式计分
@@ -396,7 +415,7 @@ packages/
 scripts/
   build.mjs      零依赖 ESM→IIFE 打包器
   make-icons.mjs 程序化生成 PNG 图标
-  test.mjs       41 项校验
+  test.mjs       46 项校验
 ```
 
 宿主只负责三件事：提供存储适配器、决定何时激活、把配置塞进来。任何 `chrome.*` / `browser.*` 出现在 `core/` 都会让测试失败。
@@ -427,6 +446,17 @@ Electron 的 `sendInputEvent` 在窗口未持续绘制时会被合并成 1~2 个
 | --- | --- |
 | [GPL-3.0-only](../LICENSE) | 默认。可自由使用、修改、分发，衍生作品需同样以 GPL-3.0 开源 |
 | [商业许可](../LICENSE-COMMERCIAL.md) | 需要在闭源产品中使用，或不愿承担 GPL 义务时另行授权 |
+
+**第三方组件**：
+
+| 组件 | 许可 | 用途 |
+| --- | --- | --- |
+| [pixelfx](https://github.com/patch-gg/pixelfx) · Shatter wipe | MIT，Copyright (c) 2026 Patch | 炮的「玻璃碎裂」形态（`packages/core/src/shatter.js`） |
+| [Sprite Fusion ice shatter](https://www.spritefusion.com/pixel-art-vfx/ice) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的撞击闪光、放射裂纹与玻璃碎片处理 |
+| [pixelfx](https://github.com/patch-gg/pixelfx) · Slash wipe | MIT，Copyright (c) 2026 Patch | 刀的「白热刃口」形态（`packages/core/src/slashwipe.js`） |
+| [Sprite Fusion slash](https://www.spritefusion.com/pixel-art-vfx/slash) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的锥形冷却拖尾、点状残迹、刀尖星芒与刃口火花 |
+
+上述 MIT 版权与许可全文分别保留在 `packages/core/src/shatter.js` 与 `packages/core/src/slashwipe.js` 头部；MIT 与本项目 GPL-3.0-only 兼容。黑洞的两套视觉形态同样参考了 pixelfx 的 black-hole / void-orb（MIT）。
 
 参与贡献见 [CONTRIBUTING.md](../CONTRIBUTING.md)。提交 PR 前请阅读 [CLA](CLA.md)：本项目采用双许可，接受贡献前需要你同意其中条款。
 

@@ -466,7 +466,8 @@ function polygonToCss(poly) {
 }
 
 // 生成一个「给定局部多边形就能画出碎片」的构造器，重切时复用同一份
-function makeBuilder(el, rect, box, oversized, filterStr) {
+// 也供 shatter.js 生成玻璃楔形碎片，避免重复 DOM 克隆逻辑
+export function makeBuilder(el, rect, box, oversized, filterStr) {
   return function build(poly) {
     const clip = `polygon(${polygonToCss(poly)})`;
 
