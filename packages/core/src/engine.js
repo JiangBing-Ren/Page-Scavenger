@@ -366,6 +366,7 @@ export function createCleaner(options) {
       const gain = Number.isFinite(eff) ? Math.max(0, Math.min(1, eff)) : 0.01;
       const grown = Math.min(holeAreaOf(blackholeMaxRadius()), holeArea + targetArea * gain);
       hole.radius = Math.max(1, Math.sqrt(grown / Math.PI));
+      hole.pulseAt = now();
 
       // 一次吸进多个元素时别把吞噬音叠成一坨
       const t = now();

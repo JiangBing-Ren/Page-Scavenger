@@ -608,86 +608,75 @@ export function drawCloseButton(ctx, state) {
 }
 
 // 黑洞的吸积盘：倾斜的椭圆环带，内圈更热更快，虚线偏移当旋转。
-// 参考 pixelfx（MIT）的 black-hole：分层差速 + 远侧被引力弯折到洞顶。
-const DISK_TILT = -0.18;
-const DISK_SQUASH = 0.42;
-const DISK_BANDS = [
-  { r: 1.05, w: 0.055, dash: 0.22, speed: 3.4, rgb: '236, 228, 255', alpha: 0.7 },
-  { r: 1.16, w: 0.05, dash: 0.18, speed: 2.4, rgb: '176, 150, 255', alpha: 0.6 },
-  { r: 1.3, w: 0.045, dash: 0.15, speed: 1.5, rgb: '112, 208, 236', alpha: 0.4 },
-  { r: 1.44, w: 0.038, dash: 0.12, speed: 0.95, rgb: '88, 176, 216', alpha: 0.26 },
-];
+// 平面黑洞（参考 pixelfx 的 void-orb，MIT）：三臂漩涡 + 爱因斯坦环 + 爬行亮边。
+// 漩涡收在 1.5R 的引力场以内，看到的范围就是能吸到的范围。
+const VOID_ARMS = 3;
 
-// half: 'back' 画上半（远侧），'front' 画下半（近侧）
-function drawDisk(ctx, cx, cy, R, t, half) {
-  const a0 = half === 'back' ? Math.PI : 0;
-  const a1 = a0 + Math.PI;
+function drawVortex(ctx, cx, cy, R, t) {
+  const inner = R * 1.14;
+  const outer = R * 1.44;
+  const spin = t / 1100;
 
   ctx.save();
-  ctx.lineCap = 'butt';
-  for (const band of DISK_BANDS) {
-    const r = R * band.r;
-    const dash = Math.max(3, r * band.dash);
+  ctx.lineCap = 'round';
 
-    // 先铺一层连续底，避免缝隙把盘面读成零散色块
+  for (let arm = 0; arm < VOID_ARMS; arm++) {
+    const base = (arm / VOID_ARMS) * Math.PI * 2;
+    const pts = [];
+    for (let i = 0; i <= 26; i++) {
+      const u = i / 26;
+      const r = outer - (outer - inner) * u;
+      // 绕两圈多才读得出「卷入」，太少会像同心圆
+      const a = base + spin + u * 6.2;
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+
+    // 尘带
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.strokeStyle = 'rgba(96, 76, 156, 0.24)';
+    ctx.lineWidth = Math.max(2, R * 0.07);
+    ctx.stroke();
+
+    // 亮丝：沿同一条臂向内流动的虚线
+    ctx.setLineDash([Math.max(2, R * 0.07), Math.max(2, R * 0.1)]);
+    ctx.lineDashOffset = -((t / 12) % (R * 0.17));
+    ctx.strokeStyle = 'rgba(198, 182, 255, 0.42)';
+    ctx.lineWidth = Math.max(1, R * 0.018);
+    ctx.stroke();
     ctx.setLineDash([]);
-    ctx.strokeStyle = `rgba(${band.rgb}, ${(band.alpha * 0.32).toFixed(3)})`;
-    ctx.lineWidth = Math.max(1, R * band.w * 1.7);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, r, r * DISK_SQUASH, DISK_TILT, a0, a1);
-    ctx.stroke();
-
-    // 再叠虚线：偏移量反向推进 = 条纹在转，内圈快外圈慢
-    ctx.strokeStyle = `rgba(${band.rgb}, ${band.alpha})`;
-    ctx.lineWidth = Math.max(1, R * band.w);
-    ctx.setLineDash([dash, dash * 0.45]);
-    ctx.lineDashOffset = -((t / 1000) * band.speed * r * 0.35);
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, r, r * DISK_SQUASH, DISK_TILT, a0, a1);
-    ctx.stroke();
   }
 
-  // 多普勒：朝向观察者的一侧更亮一档
-  const hot = DISK_BANDS[0];
-  const hr = R * hot.r;
-  const hd = Math.max(3, hr * hot.dash);
-  ctx.setLineDash([hd, hd * 1.6]);
-  ctx.lineDashOffset = -((t / 1000) * hot.speed * hr * 0.35);
-  ctx.strokeStyle = 'rgba(255, 250, 240, 0.5)';
-  ctx.lineWidth = Math.max(1, R * hot.w * 0.5);
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, hr, hr * DISK_SQUASH, DISK_TILT, a0 + Math.PI * 0.55, a1 - Math.PI * 0.12);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.restore();
-}
-
-// 引力透镜：远侧盘面绕过洞顶的一道弧，以及洞底折出的细弱次级像
-function drawLensed(ctx, cx, cy, R, t) {
-  ctx.save();
-  ctx.lineCap = 'butt';
-
-  const arc = R * 1.12;
-  ctx.setLineDash([Math.max(3, arc * 0.2), Math.max(4, arc * 0.14)]);
-  ctx.lineDashOffset = -((t / 1000) * 2.2 * R) % (arc * 0.34);
-  ctx.strokeStyle = 'rgba(198, 182, 255, 0.34)';
-  ctx.lineWidth = Math.max(1, R * 0.05);
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - R * 0.16, arc, arc * 0.5, DISK_TILT * 0.6, Math.PI, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.strokeStyle = 'rgba(150, 132, 255, 0.22)';
-  ctx.lineWidth = Math.max(1, R * 0.03);
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + R * 0.14, R * 1.04, R * 0.34, DISK_TILT, 0.15, Math.PI - 0.15);
-  ctx.stroke();
+  // 被吸进去的尘点：越靠里转得越快
+  for (let i = 0; i < 8; i++) {
+    const seed = (i * 0.618) % 1;
+    const u = (t / 1600 + seed) % 1;
+    const r = outer - (outer - inner) * u;
+    const a = seed * Math.PI * 2 + spin + u * 3.4;
+    const alpha = Math.min(1, u * 3) * (1 - u * 0.75);
+    ctx.fillStyle = `rgba(242, 238, 255, ${alpha.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, Math.max(1, R * 0.016), 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.restore();
 }
 
-// 黑洞：倾斜差速吸积盘 + 引力透镜弧 + 事件视界 + 光子环 + 外沿吸附丝 + 剩余时间细弧。
+// 光绕过洞口的爱因斯坦环：三段不同速度的弧，吞噬时整体更亮
+function drawEinsteinRing(ctx, cx, cy, R, t, gulp) {
+  for (let k = 0; k < 3; k++) {
+    const rr = R * (1.08 + k * 0.025);
+    const start = (t / (1400 + k * 600)) * (k % 2 ? -1 : 1);
+    ctx.strokeStyle = `rgba(214, 204, 255, ${(0.3 - k * 0.07 + gulp * 0.2).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, R * (0.02 - k * 0.004));
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, start, start + Math.PI * (0.6 + k * 0.2));
+    ctx.stroke();
+  }
+}
+
+// 平面黑洞：三臂漩涡 + 爱因斯坦环 + 爬行亮边 + 光子柔光 + 剩余时间细弧。
 // 只用暗色与低饱和冷色，避免整屏闪烁。
 export function drawBlackholes(ctx, state) {
   const hole = state.blackholes && state.blackholes[0];
@@ -713,29 +702,32 @@ export function drawBlackholes(ctx, state) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // 盘的外层光晕
-  const halo = ctx.createRadialGradient(hole.x, hole.y, R * 0.8, hole.x, hole.y, R * 1.9);
-  halo.addColorStop(0, 'rgba(120, 92, 220, 0.22)');
-  halo.addColorStop(0.6, 'rgba(70, 50, 140, 0.1)');
-  halo.addColorStop(1, 'rgba(20, 10, 40, 0)');
+  // 外围光晕
+  const halo = ctx.createRadialGradient(hole.x, hole.y, R * 0.9, hole.x, hole.y, R * 2.4);
+  halo.addColorStop(0, 'rgba(118, 92, 210, 0.2)');
+  halo.addColorStop(0.55, 'rgba(66, 48, 132, 0.09)');
+  halo.addColorStop(1, 'rgba(18, 10, 36, 0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R * 1.9, 0, Math.PI * 2);
+  ctx.arc(hole.x, hole.y, R * 2.4, 0, Math.PI * 2);
   ctx.fill();
 
-  // 远侧盘面（上半），随后被视界压掉一部分
-  drawDisk(ctx, hole.x, hole.y, R * pulse, t, 'back');
+  // 吞噬脉冲：吃掉目标的一瞬间亮一下
+  const gulp = hole.pulseAt ? Math.max(0, 1 - (t - hole.pulseAt) / 260) : 0;
 
-  // 远侧被弯折到洞顶的透镜像 + 洞底的细弱次级像
-  drawLensed(ctx, hole.x, hole.y, R * pulse, t);
+  // 三臂漩涡
+  drawVortex(ctx, hole.x, hole.y, R * pulse, t);
 
-  // 事件视界：一圈柔软过渡再压成纯黑
-  const veil = ctx.createRadialGradient(hole.x, hole.y, R * 0.9, hole.x, hole.y, R * 1.22);
-  veil.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+  // 爱因斯坦环
+  drawEinsteinRing(ctx, hole.x, hole.y, R * pulse, t, gulp);
+
+  // 视界：柔软过渡再压成纯黑
+  const veil = ctx.createRadialGradient(hole.x, hole.y, R * 0.92, hole.x, hole.y, R * 1.1);
+  veil.addColorStop(0, 'rgba(0, 0, 0, 1)');
   veil.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = veil;
   ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R * 1.22, 0, Math.PI * 2);
+  ctx.arc(hole.x, hole.y, R * 1.1, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = '#000';
@@ -743,34 +735,29 @@ export function drawBlackholes(ctx, state) {
   ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
   ctx.fill();
 
-  // 近侧盘面（下半）压在视界下沿之前
-  drawDisk(ctx, hole.x, hole.y, R * pulse, t, 'front');
-
-  // 光子环：外层柔光 + 内层亮线
-  ctx.strokeStyle = 'rgba(170, 140, 255, 0.25)';
-  ctx.lineWidth = Math.max(2, R * 0.07);
-  ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.strokeStyle = 'rgba(240, 234, 255, 0.85)';
-  ctx.lineWidth = Math.max(1.2, R * 0.028);
-  ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 吸附丝：从场边缘向内收的短线，随时间绕行
-  for (let i = 0; i < 12; i++) {
-    const phase = (t / 700 + i / 12) % 1;
-    const angle = (i / 12) * Math.PI * 2 + t / 1100;
-    const r0 = field * (0.98 - phase * 0.3);
-    const r1 = r0 - field * 0.12;
-    const alpha = 0.1 + 0.16 * Math.sin(Math.PI * phase);
-    ctx.strokeStyle = `rgba(150, 132, 255, ${alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.2;
+  // 爬行亮边：两段不同速度的弧绕着洞沿转
+  for (let k = 0; k < 2; k++) {
+    const start = (t / (900 + k * 700)) * (k ? -1 : 1);
+    ctx.strokeStyle = k ? 'rgba(168, 148, 255, 0.5)' : 'rgba(238, 232, 255, 0.72)';
+    ctx.lineWidth = Math.max(1.2, R * (0.036 - k * 0.012));
     ctx.beginPath();
-    ctx.moveTo(hole.x + Math.cos(angle) * r0, hole.y + Math.sin(angle) * r0);
-    ctx.lineTo(hole.x + Math.cos(angle) * r1, hole.y + Math.sin(angle) * r1);
+    ctx.arc(hole.x, hole.y, R * 0.995, start, start + Math.PI * (1.3 - k * 0.45));
+    ctx.stroke();
+  }
+
+  // 光子柔光
+  ctx.strokeStyle = `rgba(160, 138, 255, ${(0.2 + gulp * 0.25).toFixed(3)})`;
+  ctx.lineWidth = Math.max(2, R * 0.06);
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 吞噬脉冲环
+  if (gulp > 0.02) {
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.45 * gulp).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, R * 0.05 * gulp);
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, R * (1 + (1 - gulp) * 0.5), 0, Math.PI * 2);
     ctx.stroke();
   }
 
