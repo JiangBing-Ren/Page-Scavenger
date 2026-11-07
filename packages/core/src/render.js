@@ -607,7 +607,87 @@ export function drawCloseButton(ctx, state) {
   ctx.restore();
 }
 
-// 黑洞：事件视界（纯黑圆）+ 反向旋转的吸积弧 + 外沿吸附丝 + 剩余时间细弧。
+// 黑洞的吸积盘：倾斜的椭圆环带，内圈更热更快，虚线偏移当旋转。
+// 参考 pixelfx（MIT）的 black-hole：分层差速 + 远侧被引力弯折到洞顶。
+const DISK_TILT = -0.18;
+const DISK_SQUASH = 0.42;
+const DISK_BANDS = [
+  { r: 1.05, w: 0.055, dash: 0.22, speed: 3.4, rgb: '236, 228, 255', alpha: 0.7 },
+  { r: 1.16, w: 0.05, dash: 0.18, speed: 2.4, rgb: '176, 150, 255', alpha: 0.6 },
+  { r: 1.3, w: 0.045, dash: 0.15, speed: 1.5, rgb: '112, 208, 236', alpha: 0.4 },
+  { r: 1.44, w: 0.038, dash: 0.12, speed: 0.95, rgb: '88, 176, 216', alpha: 0.26 },
+];
+
+// half: 'back' 画上半（远侧），'front' 画下半（近侧）
+function drawDisk(ctx, cx, cy, R, t, half) {
+  const a0 = half === 'back' ? Math.PI : 0;
+  const a1 = a0 + Math.PI;
+
+  ctx.save();
+  ctx.lineCap = 'butt';
+  for (const band of DISK_BANDS) {
+    const r = R * band.r;
+    const dash = Math.max(3, r * band.dash);
+
+    // 先铺一层连续底，避免缝隙把盘面读成零散色块
+    ctx.setLineDash([]);
+    ctx.strokeStyle = `rgba(${band.rgb}, ${(band.alpha * 0.32).toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, R * band.w * 1.7);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r, r * DISK_SQUASH, DISK_TILT, a0, a1);
+    ctx.stroke();
+
+    // 再叠虚线：偏移量反向推进 = 条纹在转，内圈快外圈慢
+    ctx.strokeStyle = `rgba(${band.rgb}, ${band.alpha})`;
+    ctx.lineWidth = Math.max(1, R * band.w);
+    ctx.setLineDash([dash, dash * 0.45]);
+    ctx.lineDashOffset = -((t / 1000) * band.speed * r * 0.35);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r, r * DISK_SQUASH, DISK_TILT, a0, a1);
+    ctx.stroke();
+  }
+
+  // 多普勒：朝向观察者的一侧更亮一档
+  const hot = DISK_BANDS[0];
+  const hr = R * hot.r;
+  const hd = Math.max(3, hr * hot.dash);
+  ctx.setLineDash([hd, hd * 1.6]);
+  ctx.lineDashOffset = -((t / 1000) * hot.speed * hr * 0.35);
+  ctx.strokeStyle = 'rgba(255, 250, 240, 0.5)';
+  ctx.lineWidth = Math.max(1, R * hot.w * 0.5);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, hr, hr * DISK_SQUASH, DISK_TILT, a0 + Math.PI * 0.55, a1 - Math.PI * 0.12);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// 引力透镜：远侧盘面绕过洞顶的一道弧，以及洞底折出的细弱次级像
+function drawLensed(ctx, cx, cy, R, t) {
+  ctx.save();
+  ctx.lineCap = 'butt';
+
+  const arc = R * 1.12;
+  ctx.setLineDash([Math.max(3, arc * 0.2), Math.max(4, arc * 0.14)]);
+  ctx.lineDashOffset = -((t / 1000) * 2.2 * R) % (arc * 0.34);
+  ctx.strokeStyle = 'rgba(198, 182, 255, 0.34)';
+  ctx.lineWidth = Math.max(1, R * 0.05);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - R * 0.16, arc, arc * 0.5, DISK_TILT * 0.6, Math.PI, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.strokeStyle = 'rgba(150, 132, 255, 0.22)';
+  ctx.lineWidth = Math.max(1, R * 0.03);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + R * 0.14, R * 1.04, R * 0.34, DISK_TILT, 0.15, Math.PI - 0.15);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// 黑洞：倾斜差速吸积盘 + 引力透镜弧 + 事件视界 + 光子环 + 外沿吸附丝 + 剩余时间细弧。
 // 只用暗色与低饱和冷色，避免整屏闪烁。
 export function drawBlackholes(ctx, state) {
   const hole = state.blackholes && state.blackholes[0];
@@ -633,32 +713,48 @@ export function drawBlackholes(ctx, state) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // 事件视界与外围空间弯曲
-  const grad = ctx.createRadialGradient(hole.x, hole.y, R * 0.2, hole.x, hole.y, R * 1.4);
-  grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-  grad.addColorStop(0.66, 'rgba(3, 5, 10, 0.98)');
-  grad.addColorStop(0.82, 'rgba(24, 18, 48, 0.32)');
-  grad.addColorStop(1, 'rgba(3, 5, 10, 0)');
-  ctx.fillStyle = grad;
+  // 盘的外层光晕
+  const halo = ctx.createRadialGradient(hole.x, hole.y, R * 0.8, hole.x, hole.y, R * 1.9);
+  halo.addColorStop(0, 'rgba(120, 92, 220, 0.22)');
+  halo.addColorStop(0.6, 'rgba(70, 50, 140, 0.1)');
+  halo.addColorStop(1, 'rgba(20, 10, 40, 0)');
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(hole.x, hole.y, R * 1.4 * pulse, 0, Math.PI * 2);
+  ctx.arc(hole.x, hole.y, R * 1.9, 0, Math.PI * 2);
   ctx.fill();
 
-  // 吸积盘：三层反向旋转的弧
-  for (let i = 0; i < 3; i++) {
-    const rr = R * (1.08 + i * 0.13);
-    const spin = (t / (520 + i * 180)) * (i % 2 ? -1 : 1);
-    ctx.strokeStyle =
-      i === 0 ? 'rgba(158, 128, 255, 0.5)' : `rgba(0, 214, 214, ${Math.max(0, 0.2 - i * 0.05)})`;
-    ctx.lineWidth = Math.max(1, R * Math.max(0.02, 0.05 - i * 0.01));
-    ctx.beginPath();
-    ctx.arc(hole.x, hole.y, rr, spin, spin + Math.PI * (0.95 + i * 0.18));
-    ctx.stroke();
-  }
+  // 远侧盘面（上半），随后被视界压掉一部分
+  drawDisk(ctx, hole.x, hole.y, R * pulse, t, 'back');
 
-  // 世界边缘的亮环
-  ctx.strokeStyle = 'rgba(198, 182, 255, 0.78)';
-  ctx.lineWidth = Math.max(1.2, R * 0.055);
+  // 远侧被弯折到洞顶的透镜像 + 洞底的细弱次级像
+  drawLensed(ctx, hole.x, hole.y, R * pulse, t);
+
+  // 事件视界：一圈柔软过渡再压成纯黑
+  const veil = ctx.createRadialGradient(hole.x, hole.y, R * 0.9, hole.x, hole.y, R * 1.22);
+  veil.addColorStop(0, 'rgba(0, 0, 0, 0.95)');
+  veil.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = veil;
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R * 1.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 近侧盘面（下半）压在视界下沿之前
+  drawDisk(ctx, hole.x, hole.y, R * pulse, t, 'front');
+
+  // 光子环：外层柔光 + 内层亮线
+  ctx.strokeStyle = 'rgba(170, 140, 255, 0.25)';
+  ctx.lineWidth = Math.max(2, R * 0.07);
+  ctx.beginPath();
+  ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(240, 234, 255, 0.85)';
+  ctx.lineWidth = Math.max(1.2, R * 0.028);
   ctx.beginPath();
   ctx.arc(hole.x, hole.y, R, 0, Math.PI * 2);
   ctx.stroke();

@@ -832,15 +832,22 @@ export function spawnDevourFragments(el, rect, targetX, targetY, options) {
     try {
       node.animate(
         [
-          { transform: 'translate3d(0,0,0) scale(1) rotate(0deg)', opacity: 1 },
+          {
+            transform: 'translate3d(0,0,0) scale(1) rotate(0deg)',
+            opacity: 1,
+            filter: 'brightness(1.5) contrast(1.15) saturate(0.9)',
+          },
           {
             transform: `translate3d(${midX.toFixed(1)}px, ${midY.toFixed(1)}px, 0) scale(0.55) rotate(${(spin * 0.5).toFixed(0)}deg)`,
             opacity: 0.85,
             offset: 0.55,
+            filter: 'brightness(2.1) contrast(1.2) saturate(0.7)',
           },
           {
             transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) scale(0.05) rotate(${spin.toFixed(0)}deg)`,
             opacity: 0,
+            // 越靠近洞心越白热：被吞的碎块最后烧成一瞬白光
+            filter: 'brightness(3.6) contrast(1.1) saturate(0.15)',
           },
         ],
         {
@@ -1051,20 +1058,28 @@ export function spawnTornDevour(el, rect, targetX, targetY, options) {
       try {
         item.node.animate(
           [
-            { transform: 'translate3d(0,0,0) rotate(0deg) scale(1, 1)', opacity: 1 },
+            {
+              transform: 'translate3d(0,0,0) rotate(0deg) scale(1, 1)',
+              opacity: 1,
+              filter: 'brightness(1.5) contrast(1.15) saturate(0.9)',
+            },
             {
               transform: `translate3d(${popX.toFixed(1)}px, ${popY.toFixed(1)}px, 0) rotate(${(spin * 0.06).toFixed(0)}deg) scale(1.05, 1.05)`,
               opacity: 1,
               offset: 0.16,
+              filter: 'brightness(1.6) contrast(1.15) saturate(0.88)',
             },
             {
               transform: `translate3d(${(dx * 0.5 - dy * 0.16).toFixed(1)}px, ${(dy * 0.5 + dx * 0.16).toFixed(1)}px, 0) rotate(${(spin * 0.45).toFixed(0)}deg) scale(0.62, 0.44)`,
               opacity: 0.92,
               offset: 0.6,
+              filter: 'brightness(2.2) contrast(1.2) saturate(0.6)',
             },
             {
               transform: `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) rotate(${spin.toFixed(0)}deg) scale(0.04, 0.04)`,
               opacity: 0,
+              // 落进洞心前烧到白热
+              filter: 'brightness(3.8) contrast(1.05) saturate(0.1)',
             },
           ],
           { duration, delay, easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)', fill: 'forwards' }
