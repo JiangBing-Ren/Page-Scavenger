@@ -11,6 +11,19 @@ export const SAMPLE_ASSETS = {
   revolverFire: { file: 'revolver-fire.mp3', jitter: 0.16, gain: 0.7 },
   // 换弹原始 3.216 秒，2 倍速压到约 1.6 秒，与 revolverReloadMs 对齐
   reload: { file: 'revolver-reload.mp3', rate: 2, jitter: 0, gain: 2 },
+  // 刀：1-2-3-4-5 五档挥砍。2/3/4 是从 1 与 5 按 7:3 / 5:5 / 3:7 混合生成的过渡，
+  // 连斩时按刀序取用，超过五刀走中间三档的循环（见 engine 的 bladeSfxForCut）
+  bladeSwing: { file: 'blade-swing.mp3', jitter: 0.1, gain: 0.85 },
+  bladeSwing2: { file: 'blade-swing-2.wav', jitter: 0.05, gain: 0.9 },
+  bladeSwing3: { file: 'blade-swing-3.wav', jitter: 0.05, gain: 0.9 },
+  bladeSwing4: { file: 'blade-swing-4.wav', jitter: 0.05, gain: 0.9 },
+  bladeFinish: { file: 'blade-finish.wav', jitter: 0.04, gain: 0.95 },
+  // 激光炮：蓄力 7.03s（足够覆盖蓄力 + 过量段）、发射 1.62s、过量发射 1.31s
+  laserCharge: { file: 'laser-charge.mp3', jitter: 0, gain: 0.85 },
+  laserFire: { file: 'laser-fire.mp3', jitter: 0.06, gain: 0.9 },
+  laserOverFire: { file: 'laser-overfire.mp3', jitter: 0.05, gain: 0.95 },
+  // 烧蚀命中暂无采样，留给 Web Audio 合成
+  laserHit: { file: 'laser-hit.mp3', jitter: 0.14, gain: 0.8 },
 };
 
 export function sampleUrls(getUrl) {
@@ -343,51 +356,108 @@ export function createSound(getConfig, assets) {
       tone(ctx, 0.16 * vol, 'sine', 620, 90, 0.16, 0.004);
       click(ctx, 0.1 * vol, 1200, 0.05, 1.8);
     },
+
+    // 激光炮：满蓄力后的一次性发射，低频轰击 + 高频撕裂
+    laserFire(ctx, vol) {
+      tone(ctx, 0.42 * vol, 'sawtooth', 620, 90, 0.42, 0.005);
+      tone(ctx, 0.26 * vol, 'sine', 120, 42, 0.4, 0.004);
+      swept(ctx, 0.3 * vol, 'highpass', 1200, 4200, 1.0, 0.28, 0.006);
+      click(ctx, 0.2 * vol, 3200, 0.05, 2.0);
+    },
+
+    // 激光炮：烧蚀命中，嘶嘶声 + 闷响
+    laserHit(ctx, vol) {
+      swept(ctx, 0.2 * vol, 'bandpass', 2600, 900, 0.8, 0.16, 0.01);
+      click(ctx, 0.12 * vol, 1800, 0.04, 1.6);
+      tone(ctx, 0.08 * vol, 'triangle', 420, 180, 0.12, 0.006);
+    },
+
+    // 激光炮：蓄力持续嗡鸣。实际播放走 startHum('laserBeam')，这里只做 1.2 秒试听版
+    laserBeam(ctx, vol) {
+      tone(ctx, 0.08 * vol, 'sine', 180, 420, 1.2, 0.08);
+      tone(ctx, 0.05 * vol, 'triangle', 360, 840, 1.2, 0.08);
+      swept(ctx, 0.04 * vol, 'bandpass', 1600, 4200, 1.4, 1.2, 0.1);
+    },
+
+    // 激光炮：蓄力采样缺失时的合成兜底（1.2 秒上扬，与 laserChargeMs 对齐）
+    laserCharge(ctx, vol) {
+      tone(ctx, 0.1 * vol, 'sine', 160, 480, 1.2, 0.06);
+      tone(ctx, 0.06 * vol, 'triangle', 320, 960, 1.2, 0.06);
+      swept(ctx, 0.05 * vol, 'bandpass', 1200, 4600, 1.3, 1.2, 0.08);
+    },
+
+    // 激光炮：过量蓄力发射的合成兜底（比普通发射更低沉更厚）
+    laserOverFire(ctx, vol) {
+      tone(ctx, 0.5 * vol, 'sawtooth', 520, 70, 0.5, 0.005);
+      tone(ctx, 0.32 * vol, 'sine', 96, 34, 0.48, 0.004);
+      swept(ctx, 0.36 * vol, 'highpass', 900, 3800, 1.1, 0.34, 0.006);
+      click(ctx, 0.24 * vol, 2600, 0.06, 1.8);
+    },
   };
 
-  // 黑洞嗡鸣：存活期间一直响，收起时淡出。不走 play()，因为需要持续音
+  // 持续嗡鸣：存活期间一直响，收起时淡出。不走 play()，因为需要循环音。
+  // 黑洞低沉下坠、激光明亮稳定；按名称共用一套节点，避免两把武器同时占着振荡器。
+  const HUM_PRESETS = {
+    blackholeHum: {
+      low: [62, 46, 'sine'],
+      mid: [93, 69, 'triangle'],
+      air: [700, 260, 'lowpass'],
+      gain: 0.14,
+      ramp: 2.4,
+    },
+    // 蓄力时频率持续上扬，听感能直接反映 charge 比例
+    laserBeam: {
+      low: [180, 420, 'sine'],
+      mid: [360, 840, 'triangle'],
+      air: [1600, 4200, 'bandpass'],
+      gain: 0.08,
+      ramp: 1.2,
+    },
+  };
   let hum = null;
 
-  function startHum() {
+  function startHum(name) {
     if (hum) return;
-    const vol = level('blackholeHum');
+    const key = HUM_PRESETS[name] ? name : 'blackholeHum';
+    const preset = HUM_PRESETS[key];
+    const vol = level(key);
     if (vol <= 0.002) return;
     const ctx = ready();
     if (!ctx) return;
 
     const t = ctx.currentTime;
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, t);
-    master.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.14 * vol), t + 0.25);
-    master.connect(ctx.destination);
+    const bus = ctx.createGain();
+    bus.gain.setValueAtTime(0.0001, t);
+    bus.gain.exponentialRampToValueAtTime(Math.max(0.0002, preset.gain * vol), t + 0.25);
+    bus.connect(ctx.destination);
 
     const low = ctx.createOscillator();
-    low.type = 'sine';
-    low.frequency.setValueAtTime(62, t);
-    low.frequency.linearRampToValueAtTime(46, t + 2.4);
+    low.type = preset.low[2];
+    low.frequency.setValueAtTime(preset.low[0], t);
+    low.frequency.linearRampToValueAtTime(preset.low[1], t + preset.ramp);
 
     const mid = ctx.createOscillator();
-    mid.type = 'triangle';
-    mid.frequency.setValueAtTime(93, t);
-    mid.frequency.linearRampToValueAtTime(69, t + 2.4);
+    mid.type = preset.mid[2];
+    mid.frequency.setValueAtTime(preset.mid[0], t);
+    mid.frequency.linearRampToValueAtTime(preset.mid[1], t + preset.ramp);
 
     const air = noise(ctx);
     air.loop = true;
     const airFilter = ctx.createBiquadFilter();
-    airFilter.type = 'lowpass';
-    airFilter.frequency.setValueAtTime(700, t);
-    airFilter.frequency.linearRampToValueAtTime(260, t + 2.4);
+    airFilter.type = preset.air[2];
+    airFilter.frequency.setValueAtTime(preset.air[0], t);
+    airFilter.frequency.linearRampToValueAtTime(preset.air[1], t + preset.ramp);
     const airGain = ctx.createGain();
     airGain.gain.value = 0.12;
 
-    low.connect(master);
-    mid.connect(master);
-    air.connect(airFilter).connect(airGain).connect(master);
+    low.connect(bus);
+    mid.connect(bus);
+    air.connect(airFilter).connect(airGain).connect(bus);
 
     low.start(t);
     mid.start(t);
     air.start(t);
-    hum = { ctx, master, nodes: [low, mid, air] };
+    hum = { ctx, master: bus, nodes: [low, mid, air] };
   }
 
   function stopHum() {
@@ -414,8 +484,14 @@ export function createSound(getConfig, assets) {
 
     preloadSamples();
 
+    // 激光炮的起束/命中音可强制走原生合成（laserSoundStyle='synth'），即使采样存在也跳过；
+    // 'sample' 时仍按「采样优先、缺失回落合成」处理。持续嗡鸣不走 play()。
+    const cfg = config() || {};
+    const forcedSynth =
+      cfg.laserSoundStyle === 'synth' && (name === 'laserFire' || name === 'laserHit');
+
     // 有采样资源的名字优先播采样
-    if (assetUrls[name] && playSample(name, gain)) return true;
+    if (!forcedSynth && assetUrls[name] && playSample(name, gain)) return true;
 
     const ctx = ready();
     if (!ctx) return false;

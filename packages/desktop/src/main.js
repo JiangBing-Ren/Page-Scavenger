@@ -381,7 +381,7 @@ function createWindow() {
                 'window.__levelWeaponInput ? window.__levelWeaponInput() : ""'
               );
 
-              if (inputMode === 'hold') {
+              if (inputMode === 'hold' || inputMode === 'charge') {
                 // 按住类：枪口放在目标左侧，指针移到目标中心后持续射击
                 const mx = Math.max(12, pt.x - 200);
                 await wc.executeJavaScript(
@@ -394,7 +394,8 @@ function createWindow() {
                     ' return "holding";' +
                     '})()'
                 );
-                await sleep(700);
+                // charge 需要蓄满（默认 laserChargeMs=1200），hold 只需覆盖几个射击间隔
+                await sleep(inputMode === 'charge' ? 1300 : 700);
                 await wc.executeJavaScript(
                   '(() => {' +
                     ' const canvas = document.querySelector("canvas[data-adslash-ui]");' +

@@ -10,6 +10,10 @@ import {
   CANNON_BREAK_STYLE_LABELS,
   BLADE_STYLES,
   BLADE_STYLE_LABELS,
+  LASER_STYLES,
+  LASER_STYLE_LABELS,
+  LASER_SOUND_STYLES,
+  LASER_SOUND_STYLE_LABELS,
 } from '../../core/src/config.js';
 import { createCleaner } from '../../core/src/engine.js';
 import { sampleUrls, sampleBytes } from '../../core/src/sound.js';
@@ -54,6 +58,11 @@ const ADV_GROUPS = [
     ['shot', '射击'],
     ['sfx', '音效'],
   ]],
+  ['laser', '激光炮', [
+    ['beam', '光束'],
+    ['hit', '判定'],
+    ['sfx', '音效'],
+  ]],
   ['blackhole', '黑洞', [
     ['gravity', '引力'],
     ['devour', '吞噬'],
@@ -79,9 +88,13 @@ const ADV_FIELDS = [
   { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'blade', sub: 'trail' },
   { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'blade', sub: 'trail' },
   // 刀 · 音效
-  { key: 'sfxBladeSwing', label: '挥砍', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeSwing', label: '第1刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeSwing2', label: '第2刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeSwing3', label: '第3刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeSwing4', label: '第4刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
   { key: 'sfxBladeCut', label: '切入', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
   { key: 'sfxBladeBreak', label: '碎裂', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { key: 'sfxBladeFinish', label: '多刀最后一击', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
 
   // 炮 · 爆破
   { key: 'cannonRadius', label: '爆破半径', type: 'range', min: 60, max: 320, step: 10, suffix: 'px', group: 'cannon', sub: 'blast' },
@@ -120,6 +133,26 @@ const ADV_FIELDS = [
   // 机枪 · 音效
   { key: 'sfxMachinegunFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
   { key: 'sfxMachinegunHit', label: '弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
+
+  // 激光炮 · 光束
+  { key: 'laserStyle', label: '视觉形态', type: 'select', options: LASER_STYLES, labels: LASER_STYLE_LABELS, group: 'laser', sub: 'beam' },
+  { key: 'laserWidth', label: '满蓄力光柱宽', type: 'range', min: 4, max: 60, step: 2, suffix: 'px', group: 'laser', sub: 'beam' },
+  { key: 'laserColumnMs', label: '光柱动画时长', type: 'range', min: 300, max: 2000, step: 50, suffix: 'ms', group: 'laser', sub: 'beam' },
+  // 激光炮 · 判定
+  { key: 'laserChargeMs', label: '满蓄力时长', type: 'range', min: 200, max: 2500, step: 50, suffix: 'ms', group: 'laser', sub: 'hit' },
+  { key: 'laserOverchargeMs', label: '过量蓄力时长', type: 'range', min: 200, max: 3000, step: 50, suffix: 'ms', group: 'laser', sub: 'hit', hint: '满蓄力后继续按住多久达到宽度上限（满蓄力的 3 倍）' },
+  { key: 'laserCooldownMs', label: '发射冷却', type: 'range', min: 0, max: 1500, step: 50, suffix: 'ms', group: 'laser', sub: 'hit' },
+  { key: 'laserRange', label: '满蓄力射程', type: 'range', min: 200, max: 3000, step: 100, suffix: 'px', group: 'laser', sub: 'hit' },
+  { key: 'laserMaxTargets', label: '贯穿上限', type: 'range', min: 1, max: 20, step: 1, suffix: '个', group: 'laser', sub: 'hit' },
+  { key: 'laserBurnThreshold', label: '烧毁阈值', type: 'range', min: 0.1, max: 1, step: 0.05, group: 'laser', sub: 'hit', hint: '烧蚀面积占比达到该值时元素整体消失并结算' },
+  { key: 'laserBurnIntensity', label: '灼烧程度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'laser', sub: 'hit', hint: '影响焦边宽度、边缘破碎度与余温时长；越大，贯穿口外围的焦痕越明显' },
+  // 激光炮 · 音效
+  { key: 'laserSoundStyle', label: '音效来源', type: 'select', options: LASER_SOUND_STYLES, labels: LASER_SOUND_STYLE_LABELS, group: 'laser', sub: 'sfx', hint: '持续嗡鸣始终由 Web Audio 合成；此项切换起束音与命中音' },
+  { key: 'sfxLaserCharge', label: '蓄力', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
+  { key: 'sfxLaserFire', label: '发射', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
+  { key: 'sfxLaserOverFire', label: '过量发射', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
+  { key: 'sfxLaserHit', label: '烧蚀', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
+  { key: 'sfxLaserBeam', label: '蓄力嗡鸣（兜底）', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
 
   // 黑洞 · 引力
   { key: 'blackholeStyle', label: '视觉形态', type: 'select', options: BLACKHOLE_STYLES, labels: BLACKHOLE_STYLE_LABELS, group: 'blackhole', sub: 'gravity' },

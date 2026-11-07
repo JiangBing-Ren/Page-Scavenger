@@ -1,4 +1,12 @@
-import { DEFAULT_CONFIG, SIZE_LEVELS, BLACKHOLE_STYLES, CANNON_BREAK_STYLES, BLADE_STYLES } from './config.js';
+import {
+  DEFAULT_CONFIG,
+  SIZE_LEVELS,
+  BLACKHOLE_STYLES,
+  CANNON_BREAK_STYLES,
+  BLADE_STYLES,
+  LASER_STYLES,
+  LASER_SOUND_STYLES,
+} from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
 import {
@@ -14,6 +22,7 @@ import {
   spawnDevourFragments,
   spawnTornDevour,
 } from './fragments.js';
+import { buildBurnBand, applyBurn, restoreBurn, activeBurnEdges, clearBurns } from './burns.js';
 import { spawnShatterWipe } from './shatter.js';
 import { spawnSlashWipeFragments } from './slashwipe.js';
 import { piecesAt, getPiece } from './pieces.js';
@@ -33,8 +42,45 @@ import {
   drawShatterWipes,
   drawSlashWipes,
 } from './render.js';
+import { drawLaserEmitter, drawLaserColumn, drawBurnEdges } from './laserfx.js';
 
 const now = () => performance.now();
+const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+// 过量蓄力：满蓄力后继续按住，光柱宽度从 1 倍线性涨到 3 倍（上限由需求指定）
+export const OVERCHARGE_WIDTH_CAP = 3;
+
+// base 是 0~1 的蓄力进度，over 是 0~1 的过量进度。
+// base=1、over=0 时为满蓄力宽度（1 倍），over 到 1 时为上限倍数。
+// 刀的多刀音效：第 1 刀固定单次挥砍，最后一刀固定最后一击，
+// 中间的刀用 2/3/4 三档小循环轮换。三种排列按 2-3-4 → 3-4-2 → 4-2-3 循环，
+// 于是序列是 1,2,3,4,3,4,2,4,2,3,2,3,4,...（第 1 刀之后就接 2-3-4 的第一轮）。
+const BLADE_SFX = ['bladeSwing', 'bladeSwing2', 'bladeSwing3', 'bladeSwing4', 'bladeFinish'];
+const BLADE_LOOP = [
+  [2, 3, 4],
+  [3, 4, 2],
+  [4, 2, 3],
+];
+
+/**
+ * index 从 1 开始。传了 total 才能判定「最后一刀」——
+ * 长按叠刀知道总刀数，普通拖动边划边切、无法预知总数，最后一档会顺延进循环。
+ */
+export function bladeSfxForCut(index, total) {
+  const i = Math.max(1, Math.floor(Number(index) || 1));
+  const n = Math.floor(Number(total) || 0);
+  if (i <= 1) return BLADE_SFX[0];
+  if (n > 1 && i >= n) return BLADE_SFX[BLADE_SFX.length - 1];
+  const k = i - 2; // 中间段从第 2 刀开始数
+  const level = BLADE_LOOP[Math.floor(k / 3) % BLADE_LOOP.length][k % 3];
+  return BLADE_SFX[level - 1];
+}
+
+export function chargeWidthMul(base, over) {
+  const b = clamp(base, 0, 1);
+  const o = clamp(over, 0, 1);
+  return (0.35 + 0.65 * b) * (1 + (OVERCHARGE_WIDTH_CAP - 1) * o);
+}
 
 /**
  * 宿主无关的斩击引擎。宿主（扩展 / 油猴 / Electron）只负责：
@@ -78,6 +124,7 @@ export function createCleaner(options) {
     listeners: [],
     marks: [],
     slashCount: 0,
+    bladeCutIndex: 1, // 本次拖动的连斩刀序，决定播哪一档挥砍音
     lastFireAt: 0,
     firing: { active: false, muzzle: null, aim: null, lastShotAt: 0 },
     chambers: 6,
@@ -87,6 +134,15 @@ export function createCleaner(options) {
     blackholes: [],
     shatterWipes: [],
     slashWipes: [],
+    charging: null, // { startAt, x, y }：激光炮蓄力状态
+    weaponSprite: {
+      x: 0, y: 0, aimX: 0, aimY: 0,
+      charge: 0, over: 0, recoil: 0,
+      active: false, placed: false,
+    },
+    laserColumn: null, // 一次性贯穿光柱，绘制完即清
+    laserBurns: [], // 待挖的烧痕队列，按光柱推进顺序逐个生效
+    laserCooldownUntil: 0,
     blackholeCooldownUntil: 0,
     lastEatSfxAt: 0,
   };
@@ -154,7 +210,25 @@ export function createCleaner(options) {
     if (!weapon.implemented) return { ok: false, reason: 'not-implemented' };
     // 离开黑洞时把还在吸的奇点一起收掉，避免切武器后残留
     if (CONFIG.weapon === 'blackhole' && weapon.id !== 'blackhole') clearBlackholes();
+    // 离开激光炮时取消蓄力与光柱；烧痕属于页面损伤，保留不随切武器撤销
+    if (CONFIG.weapon === 'laser' && weapon.id !== 'laser') {
+      state.charging = null;
+      state.laserColumn = null;
+      state.laserBurns = [];
+      state.weaponSprite.active = false;
+      state.firing.active = false;
+      sound.stopHum();
+    }
     CONFIG.weapon = weapon.id;
+    // 首次切到激光炮时给炮台一个默认就位点；之后只在 pointerdown 时重新就位
+    if (weapon.id === 'laser' && !state.weaponSprite.placed) {
+      const s = state.weaponSprite;
+      s.x = Math.round(window.innerWidth * 0.5);
+      s.y = Math.round(window.innerHeight * 0.78);
+      s.aimX = s.x;
+      s.aimY = Math.max(0, s.y - 160);
+      s.placed = true;
+    }
     // 切到左轮时补满弹仓
     if (weapon.id === 'revolver') {
       state.chambers = Math.max(1, Math.floor(CONFIG.revolverChambers) || 6);
@@ -454,54 +528,33 @@ export function createCleaner(options) {
     sound.stopHum();
   }
 
-  // 机枪：枪口固定在按下点，按住期间朝光标方向按间隔持续扫射
-  function fireStep() {
-    const f = state.firing;
-    if (!f.active || !f.muzzle || !f.aim) return;
+  // hold 类武器的逐帧参数表：避免把武器名写死在 fireStep 里
+  const HOLD_PARAMS = {
+    machinegun: {
+      cooldown: (c) => c.machinegunCooldown,
+      holeRadius: (c) => c.machinegunHoleRadius,
+      spread: (c) => c.machinegunSpread,
+      fire: 'machinegunFire',
+    },
+    revolver: {
+      cooldown: (c) => c.revolverCooldown,
+      holeRadius: (c) => c.revolverHoleRadius,
+      spread: () => 0,
+      fire: 'revolverFire',
+    },
+  };
 
-    const weapon = currentWeapon();
-    if (!weapon || weapon.input !== 'hold') return;
-
-    const cooldown =
-      weapon.id === 'machinegun' ? CONFIG.machinegunCooldown : CONFIG.revolverCooldown;
-    const holeRadius =
-      weapon.id === 'machinegun' ? CONFIG.machinegunHoleRadius : CONFIG.revolverHoleRadius;
-    const spread = weapon.id === 'machinegun' ? CONFIG.machinegunSpread : 0;
-
-    const t = now();
-    if (t - f.lastShotAt < cooldown) return;
-    f.lastShotAt = t;
-
-    fireBullet(f.muzzle, f.aim, { holeRadius, spread });
-  }
-
-  // 一颗子弹：沿枪口→光标做射线检测，命中最近的目标
-  function fireBullet(muzzle, rawAim, options) {
-    const opts = options || {};
-    const spread = Number.isFinite(opts.spread) ? opts.spread : 0;
-    const aim =
-      spread > 0
-        ? {
-            x: rawAim.x + (Math.random() - 0.5) * 2 * spread,
-            y: rawAim.y + (Math.random() - 0.5) * 2 * spread,
-          }
-        : rawAim;
-
-    let dx = aim.x - muzzle.x;
-    let dy = aim.y - muzzle.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 4) return;
-
-    const steps = Math.max(2, Math.ceil(dist / CONFIG.sampleStep));
+  // 沿线段采样，返回第一个可切目标与命中点。机枪与激光共用
+  function raycastTarget(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const steps = Math.max(2, Math.ceil(Math.hypot(dx, dy) / CONFIG.sampleStep));
     const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
 
-    let hitTarget = null;
-    let hitPoint = null;
-
-    for (let i = 1; i <= steps && !hitTarget; i++) {
-      const t = i / steps;
-      const x = muzzle.x + dx * t;
-      const y = muzzle.y + dy * t;
+    for (let i = 1; i <= steps; i++) {
+      const u = i / steps;
+      const x = from.x + dx * u;
+      const y = from.y + dy * u;
 
       let stack;
       try {
@@ -520,20 +573,256 @@ export function createCleaner(options) {
 
         const target = findSlashTarget(node, env);
         if (target && !state.slashed.has(target) && !state.pending.has(target)) {
-          hitTarget = target;
-          hitPoint = { x, y };
+          return { target, point: { x, y } };
+        }
+        break;
+      }
+    }
+    return null;
+  }
+
+  // 把全局线段裁到元素矩形，得到烧蚀带的中心线（Liang-Barsky）
+  function clipSegmentToBox(from, to, rect) {
+    let t0 = 0;
+    let t1 = 1;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const tests = [
+      [-dx, from.x - rect.left],
+      [dx, rect.right - from.x],
+      [-dy, from.y - rect.top],
+      [dy, rect.bottom - from.y],
+    ];
+    for (const [p, q] of tests) {
+      if (Math.abs(p) < 1e-9) {
+        if (q < 0) return null;
+        continue;
+      }
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return null;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return null;
+        if (r < t1) t1 = r;
+      }
+    }
+    if (t1 - t0 < 0.001) return null;
+    return {
+      x1: from.x + dx * t0,
+      y1: from.y + dy * t0,
+      x2: from.x + dx * t1,
+      y2: from.y + dy * t1,
+    };
+  }
+
+  // 烧蚀达阈值：恢复原 mask 后按「目标整体消失」结算，沿用现有撤销/标记/计分链路
+  function finishBurnTarget(el, rect, cx, cy) {
+    restoreBurn(el);
+    const sel = cssPath(el);
+    const prevStyle = el.getAttribute('style');
+    hideEl(el);
+    state.slashed.add(el);
+    releaseLift(el);
+    if (sel) addMark(sel);
+    state.undoStack.push({ sel, prevStyle });
+    if (state.undoStack.length > 20) state.undoStack.shift();
+    spawnSparks(state.particles, rect, { x: cx, y: cy }, { x: 1, y: 0 });
+    state.slashCount++;
+    onSlash({ el, rect, count: state.slashCount, weapon: CONFIG.weapon });
+  }
+
+  // 只计算「这条光柱会在这个元素上留下什么」，不立刻挖洞。
+  // 真正的 apply 由队列按光柱推进顺序触发，痕迹才会跟着激光出现，
+  // 而不是发射瞬间整条一起冒出来。
+  function planBurn(el, from, to, half, threshold, beam) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) return null;
+    const clipped = clipSegmentToBox(from, to, rect);
+    if (!clipped) return null;
+
+    const a = { x: clipped.x1 - rect.left, y: clipped.y1 - rect.top };
+    const b = { x: clipped.x2 - rect.left, y: clipped.y2 - rect.top };
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 6) return null;
+
+    const intensity = clamp(Number(CONFIG.laserBurnIntensity) || 1, 0.3, 2);
+    const band = buildBurnBand(
+      a,
+      b,
+      half,
+      Math.random() * 100,
+      { w: rect.width, h: rect.height },
+      intensity
+    );
+    if (!band) return null; // 只擦到边角、不足以形成烧痕时跳过
+
+    const cx = (clipped.x1 + clipped.x2) / 2;
+    const cy = (clipped.y1 + clipped.y2) / 2;
+    // 目标中心在光柱上的投影位置 → 决定它排在第几个出现
+    const proj = ((cx - beam.from.x) * beam.dx + (cy - beam.from.y) * beam.dy) / Math.max(1, beam.range);
+    return { el, rect, band, cx, cy, threshold, u: clamp(proj, 0, 1) };
+  }
+
+  function applyBurnJob(job) {
+    const result = applyBurn(job.el, job.band, { threshold: job.threshold });
+    if (result.complete) {
+      finishBurnTarget(job.el, job.rect, job.cx, job.cy);
+      return;
+    }
+    sound.play('laserHit');
+    state.slashCount++;
+    onSlash({
+      el: job.el,
+      rect: job.rect,
+      count: state.slashCount,
+      weapon: CONFIG.weapon,
+      area: result.added,
+      burned: result.ratio,
+    });
+  }
+
+  // 激光炮：蓄力结束后一次性发射贯穿光柱，沿途所有目标都被烧一条带
+  function fireLaser(from, aim, ratio) {
+    const t = now();
+    if (t < state.laserCooldownUntil) return;
+
+    const chargeMs = Math.max(100, Number(CONFIG.laserChargeMs) || 1200);
+    const overMs = Math.max(100, Number(CONFIG.laserOverchargeMs) || 1200);
+    const base = clamp(ratio, 0, 1);
+    const over = clamp(((ratio - 1) * chargeMs) / overMs, 0, 1);
+    const scale = 0.35 + 0.65 * base;
+    // 只有宽度吃过量加成；射程与贯穿数在满蓄力就封顶
+    const width = Math.max(4, Number(CONFIG.laserWidth) || 18) * chargeWidthMul(base, over);
+    // 蓄力决定「穿过瞄准点之后还能深入多远」，而不是绝对射程：
+    // 这样无论短按还是满蓄力，光柱都会越过光标，不会出现够不到鼠标的情况
+    const depth = Math.max(160, (Number(CONFIG.laserRange) || 1400) * scale);
+    const maxTargets = Math.max(1, Math.round((Number(CONFIG.laserMaxTargets) || 8) * scale));
+    const threshold = clamp(Number(CONFIG.laserBurnThreshold) || 0.6, 0.05, 1);
+    const durationMs = Math.max(200, Number(CONFIG.laserColumnMs) || 900);
+    // 冷却允许配成 0，不能用 `|| 默认值`（0 是 falsy 会被默认值吃掉）
+    const cooldownRaw = Number(CONFIG.laserCooldownMs);
+    const cooldown = Number.isFinite(cooldownRaw) ? Math.max(0, cooldownRaw) : 420;
+
+    let dx = aim.x - from.x;
+    let dy = aim.y - from.y;
+    let aimDist = Math.hypot(dx, dy);
+    if (aimDist < 8) {
+      dx = 1;
+      dy = 0;
+      aimDist = 0;
+    } else {
+      dx /= aimDist;
+      dy /= aimDist;
+    }
+    const range = aimDist + depth;
+    const to = { x: from.x + dx * range, y: from.y + dy * range };
+
+    state.laserColumn = {
+      from,
+      to,
+      width,
+      t0: t,
+      durationMs,
+      style: CONFIG.laserStyle,
+      charge: base,
+      over,
+    };
+    state.laserCooldownUntil = t + cooldown;
+    // 进入过量段后换用更厚重的发射音
+    sound.play(over > 0.01 ? 'laserOverFire' : 'laserFire');
+    state.shake = Math.max(state.shake, 0.3 + 0.3 * ratio);
+
+    // 沿光柱采样收集所有目标（不是最近一个）
+    const steps = Math.max(4, Math.ceil(range / CONFIG.sampleStep));
+    const env = { config: CONFIG, marks: state.marks, canvas: state.canvas };
+    const seen = new Set();
+    const targets = [];
+    for (let i = 1; i <= steps; i++) {
+      const u = i / steps;
+      const x = from.x + (to.x - from.x) * u;
+      const y = from.y + (to.y - from.y) * u;
+      let stack;
+      try {
+        stack = document.elementsFromPoint(x, y);
+      } catch (e) {
+        continue;
+      }
+      if (!stack) continue;
+      for (const node of stack) {
+        if (!node || node.nodeType !== 1) continue;
+        if (node === state.canvas || node === document.documentElement || node === document.body) continue;
+        if (node.hasAttribute && node.hasAttribute('data-adslash-ui')) continue;
+        const target = findSlashTarget(node, env);
+        if (target && !seen.has(target) && !state.slashed.has(target) && !state.pending.has(target)) {
+          seen.add(target);
+          targets.push(target);
         }
         break;
       }
     }
 
+    // 容器与内部元素同时命中时只保留容器
+    const filtered = targets.filter((target) => !targets.some((o) => o !== target && o.contains(target)));
+    const beam = { from, dx, dy, range };
+    const jobs = [];
+    filtered.slice(0, maxTargets).forEach((el) => {
+      const job = planBurn(el, from, to, width / 2, threshold, beam);
+      if (job) jobs.push(job);
+    });
+
+    // 按目标在光柱上的投影位置排队：激光扫到哪个目标，哪里才出现痕迹
+    const spread = durationMs * 0.7;
+    state.laserBurns = jobs
+      .map((job) => ({ ...job, at: t + spread * job.u }))
+      .sort((a, b) => a.at - b.at);
+  }
+
+  // 按住类武器：枪口固定在按下点，按住期间朝光标方向持续生效
+  function fireStep() {
+    const f = state.firing;
+    if (!f.active || !f.muzzle || !f.aim) return;
+
+    const weapon = currentWeapon();
+    if (!weapon || weapon.input !== 'hold') return;
+
+    const params = HOLD_PARAMS[weapon.id] || HOLD_PARAMS.revolver;
+    const t = now();
+    if (t - f.lastShotAt < params.cooldown(CONFIG)) return;
+    f.lastShotAt = t;
+
+    fireBullet(f.muzzle, f.aim, {
+      holeRadius: params.holeRadius(CONFIG),
+      spread: params.spread(CONFIG),
+      fire: params.fire,
+    });
+  }
+
+  // 一颗子弹：沿枪口→光标做射线检测，命中最近的目标
+  function fireBullet(muzzle, rawAim, options) {
+    const opts = options || {};
+    const spread = Number.isFinite(opts.spread) ? opts.spread : 0;
+    const aim =
+      spread > 0
+        ? {
+            x: rawAim.x + (Math.random() - 0.5) * 2 * spread,
+            y: rawAim.y + (Math.random() - 0.5) * 2 * spread,
+          }
+        : rawAim;
+
+    const dx = aim.x - muzzle.x;
+    const dy = aim.y - muzzle.y;
+    if (Math.hypot(dx, dy) < 4) return;
+
+    const result = raycastTarget(muzzle, aim);
+    const hitTarget = result ? result.target : null;
+    const hitPoint = result ? result.point : null;
     const end = hitPoint || aim;
 
     // 弹道
     if (state.tracers.length > 40) state.tracers.shift();
     state.tracers.push({ x1: muzzle.x, y1: muzzle.y, x2: end.x, y2: end.y, alpha: 1 });
 
-    sound.play('machinegunFire');
+    sound.play(opts.fire || 'machinegunFire');
     state.shake = Math.max(state.shake, 0.22);
 
     // 机枪枪口火光：记录方向，绘制时按侧视画成锥形
@@ -704,7 +993,9 @@ export function createCleaner(options) {
         spawnDOMFragments(el, rect, hitPoint, dir, entryPoint, CONFIG.hitStop);
       }
       spawnSparks(state.particles, rect, hitPoint, dir);
-      sound.play('bladeCut');
+      // 每命中一刀递进一档；超过五刀走中间三档循环
+      state.bladeCutIndex += 1;
+      sound.play(bladeSfxForCut(state.bladeCutIndex));
 
       state.slashCount++;
       onSlash({ el, rect, count: state.slashCount, weapon: CONFIG.weapon });
@@ -909,7 +1200,9 @@ export function createCleaner(options) {
     }
 
     if (state.cutSequence) state.cutSequence.index = index + 1;
-    sound.play('bladeCut');
+    // 起手已占第 1 刀，逐刀落线从第 2 刀开始；总刀数 = 起手 + 切线数，
+    // 有总数才能让最后一刀落在「最后一击」
+    sound.play(bladeSfxForCut(index + 2, cuts.length + 1));
 
     const gap = Math.max(
       CONFIG.cutStepMin,
@@ -1088,6 +1381,28 @@ export function createCleaner(options) {
 
     const weapon = currentWeapon();
 
+    // 蓄力类武器：按住充能，松手一次性发射
+    if (weapon && weapon.implemented && weapon.input === 'charge') {
+      e.preventDefault();
+      const t = now();
+      if (t < state.laserCooldownUntil) return;
+      state.charging = { startAt: t, x: e.clientX, y: e.clientY };
+      state.weaponSprite = {
+        x: e.clientX,
+        y: e.clientY,
+        aimX: e.clientX,
+        aimY: e.clientY,
+        charge: 0,
+        over: 0,
+        recoil: 0,
+        active: true,
+        placed: true,
+      };
+      // 蓄力音用真实采样（7.03s，足够覆盖蓄力 + 过量段）；缺失时回落合成
+      sound.play('laserCharge');
+      return;
+    }
+
     // 按住类武器：以按下点为枪口，按住期间持续射击
     if (weapon && weapon.implemented && weapon.input === 'hold') {
       e.preventDefault();
@@ -1116,7 +1431,9 @@ export function createCleaner(options) {
     // 未实现的武器不响应输入
     if (!canSlash()) return;
 
-    sound.play('bladeSwing');
+    // 每次按下重置连斩计数：起手就是第 1 刀（单次挥砍音）
+    state.bladeCutIndex = 1;
+    sound.play(bladeSfxForCut(1));
 
     e.preventDefault();
 
@@ -1136,6 +1453,17 @@ export function createCleaner(options) {
     // 射击时瞄准点跟随光标，不受 isDrawing 限制
     if (state.firing.active) {
       state.firing.aim = { x: e.clientX, y: e.clientY };
+    }
+
+    // 炮台只在 pointerdown 时重新就位，其余时间固定不动，只更新瞄准点。
+    // 这样发射瞬间不会因为追赶光标而「向前挪一段」，预瞄也稳定。
+    if (state.weaponSprite.active) {
+      state.weaponSprite.aimX = e.clientX;
+      state.weaponSprite.aimY = e.clientY;
+    }
+    if (state.charging) {
+      state.charging.x = e.clientX;
+      state.charging.y = e.clientY;
     }
 
     // 长按模式下的黑洞跟着光标走；如果指针已经松开（在窗口外放的情况），顺手收束
@@ -1169,10 +1497,25 @@ export function createCleaner(options) {
     if (!state.active) return;
 
     state.firing.active = false;
+    // 蓄力类：松手发射一次贯穿光柱
+    if (state.charging) {
+      const c = state.charging;
+      state.charging = null;
+      sound.stopHum();
+      const chargeMs = Math.max(100, Number(CONFIG.laserChargeMs) || 1200);
+      // 不封顶：超过 1 的部分就是过量蓄力，交给 fireLaser 换成额外宽度
+      const ratio = (now() - c.startAt) / chargeMs;
+      const s = state.weaponSprite;
+      s.charge = Math.min(1, ratio);
+      s.over = 0;
+      s.recoil = 1;
+      fireLaser({ x: s.x, y: s.y }, { x: c.x, y: c.y }, ratio);
+    }
     releaseBlackhole();
 
     state.isDrawing = false;
     state.prevPoint = null;
+    state.bladeCutIndex = 1; // 下次按下重新从第 1 刀开始
     state.activeHits.clear();
     state.pieceHits.clear();
 
@@ -1236,6 +1579,52 @@ export function createCleaner(options) {
     drawEffects(ctx, state, CONFIG);
     drawShatterWipes(ctx, state);
     drawSlashWipes(ctx, state);
+
+    // 激光炮：焦边在最底、光柱居中、炮台最上 —— 灼烧痕迹不能盖住激光本身
+    const tFrame = now();
+    const laserReady = !!(currentWeapon() && currentWeapon().id === 'laser');
+    state.weaponSprite.active = laserReady;
+
+    // 激光痕迹按光柱推进顺序逐个生效：激光扫到哪，哪里才出现痕迹
+    if (state.laserBurns.length) {
+      const due = [];
+      const rest = [];
+      for (const job of state.laserBurns) (job.at <= tFrame ? due : rest).push(job);
+      if (due.length) {
+        state.laserBurns = rest;
+        for (const job of due) applyBurnJob(job);
+      }
+    }
+
+    // 因果链：激光 → 激光痕迹（洞）→ 余温灼烧（glow）→ 永久灼烧痕迹（scar）。
+    // 灼烧必须等光柱完全扫完才开始，灼烧程度越高余温持续越久。
+    const columnMs = Math.max(200, Number(CONFIG.laserColumnMs) || 900);
+    const burnK = clamp(Number(CONFIG.laserBurnIntensity) || 1, 0.3, 2);
+    drawBurnEdges(
+      ctx,
+      activeBurnEdges(columnMs * (1.8 + 0.6 * burnK), columnMs * 1.0),
+      tFrame
+    );
+    if (state.laserColumn) {
+      if (tFrame - state.laserColumn.t0 > state.laserColumn.durationMs) state.laserColumn = null;
+      else drawLaserColumn(ctx, state.laserColumn, tFrame, CONFIG);
+    }
+    if (laserReady) {
+      if (state.charging) {
+        const elapsed = tFrame - state.charging.startAt;
+        const chargeMs = Math.max(100, Number(CONFIG.laserChargeMs) || 1200);
+        const overMs = Math.max(100, Number(CONFIG.laserOverchargeMs) || 1200);
+        // charge 可超过 1：炮台据此画第二圈过量指示
+        state.weaponSprite.charge = elapsed / chargeMs;
+        state.weaponSprite.over = clamp((elapsed - chargeMs) / overMs, 0, 1);
+      } else {
+        state.weaponSprite.charge *= 0.9;
+        state.weaponSprite.over *= 0.9;
+      }
+      drawLaserEmitter(ctx, state.weaponSprite, CONFIG);
+    }
+    state.weaponSprite.recoil *= 0.88;
+
     drawTrail(ctx, state, CONFIG);
     updateParticles(ctx, state, (type) => sound.play(type));
     drawFiringGuide(ctx, state);
@@ -1327,6 +1716,12 @@ export function createCleaner(options) {
     state.particles = [];
     state.shatterWipes = [];
     state.slashWipes = [];
+    state.charging = null;
+    state.laserColumn = null;
+    state.laserBurns = [];
+    state.weaponSprite.active = false;
+    clearBurns();
+    sound.stopHum();
     state.prevPoint = null;
     state.closeBtn = null;
   }
@@ -1454,6 +1849,12 @@ export function createCleaner(options) {
       if (key === 'bladeStyle') {
         if (BLADE_STYLES.indexOf(value) === -1) continue;
       }
+      if (key === 'laserStyle') {
+        if (LASER_STYLES.indexOf(value) === -1) continue;
+      }
+      if (key === 'laserSoundStyle') {
+        if (LASER_SOUND_STYLES.indexOf(value) === -1) continue;
+      }
       // 换武器统一走 setWeapon：补弹仓、收掉残留黑洞都在这条路径上
       if (key === 'weapon') {
         if (value !== CONFIG.weapon) setWeapon(value);
@@ -1517,6 +1918,10 @@ export function createCleaner(options) {
       else if (weapon.id === 'cannon') sound.play('cannonFire');
       else if (weapon.id === 'revolver') sound.play('revolverFire');
       else if (weapon.id === 'machinegun') sound.play('machinegunFire');
+      else if (weapon.id === 'laser') {
+        sound.play('laserFire');
+        sound.play('laserHit');
+      }
       else if (weapon.id === 'blackhole') {
         sound.play('blackholeOpen');
         sound.play('blackholeHum');
@@ -1583,6 +1988,12 @@ export function createCleaner(options) {
           { x, y },
           { holeRadius: CONFIG.machinegunHoleRadius, spread: 0 }
         );
+      } else if (weapon.id === 'laser') {
+        // 预览时直接以满蓄力发射一次贯穿光柱
+        const from = { x: Math.max(4, x - 260), y };
+        state.weaponSprite = { x: from.x, y: from.y, aimX: x, aimY: y, charge: 1, recoil: 1, active: true };
+        state.laserCooldownUntil = 0;
+        fireLaser(from, { x, y }, 1);
       } else {
         let hit = null;
         try {

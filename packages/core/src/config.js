@@ -76,6 +76,20 @@ export const DEFAULT_CONFIG = {
   machinegunHoleRadius: 18,
   machinegunCooldown: 90,
   machinegunSpread: 12,
+  // 激光炮：按住蓄力、松手发射贯穿光柱，沿途目标只被烧出焦痕并累积损伤
+  laserWidth: 18, // 满蓄力时光柱/烧蚀带的宽度
+  laserRange: 1400, // 满蓄力射程
+  laserChargeMs: 1200, // 蓄满所需时长
+  laserOverchargeMs: 1200, // 满蓄力后继续按住多久达到宽度上限（满蓄力的 3 倍）
+  laserCooldownMs: 420, // 发射后冷却
+  laserColumnMs: 900, // 光柱动画时长
+  laserBurnThreshold: 0.6, // 烧蚀面积占比达此值时元素整体消失并结算
+  laserBurnIntensity: 1, // 灼烧程度：焦边宽度、边缘破碎度与余温时长的倍率
+  laserMaxTargets: 8, // 满蓄力单次最多贯穿的目标数
+  // 视觉形态：'column' Warp in 式中空光柱（为后续形态预留分发点）
+  laserStyle: 'column',
+  // 音效来源：'sample' 优先真实采样（缺失自动回落合成）/ 'synth' 强制 Web Audio 合成
+  laserSoundStyle: 'sample',
   // 黑洞：点击放置奇点；长按模式下按住拖动，跟随光标吞吸
   // 视觉形态：'3d' 倾斜差速吸积盘（默认）/ '2d' 平面 void-orb（备选）
   blackholeStyle: '3d',
@@ -97,8 +111,12 @@ export const DEFAULT_CONFIG = {
   shellCasingsEnabled: true,
   // 每类音效的独立音量倍率（0 = 静音），便于逐项对比差异
   sfxBladeSwing: 1,
+  sfxBladeSwing2: 1,
+  sfxBladeSwing3: 1,
+  sfxBladeSwing4: 1,
   sfxBladeCut: 1,
   sfxBladeBreak: 1,
+  sfxBladeFinish: 1,
   sfxCannonFire: 1,
   sfxCannonCrack: 1,
   sfxCannonBreak: 1,
@@ -111,6 +129,11 @@ export const DEFAULT_CONFIG = {
   sfxBlackholeEat: 1,
   sfxReload: 1,
   sfxShellDrop: 1,
+  sfxLaserBeam: 1,
+  sfxLaserCharge: 1,
+  sfxLaserFire: 1,
+  sfxLaserOverFire: 1,
+  sfxLaserHit: 1,
 };
 
 export const BASE_SELECTORS = [
@@ -129,6 +152,20 @@ export const SKIP_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'OPTION']);
 
 // 克隆碎片时无法渲染的元素，用同尺寸色块代替
 export const MEDIA_SELECTOR = 'iframe, video, canvas, object, embed';
+
+// 激光炮：视觉形态与音效来源。column 当前是唯一实现
+export const LASER_STYLES = ['column'];
+
+export const LASER_STYLE_LABELS = {
+  column: '中空光柱（默认）',
+};
+
+export const LASER_SOUND_STYLES = ['synth', 'sample'];
+
+export const LASER_SOUND_STYLE_LABELS = {
+  synth: '原生合成（默认）',
+  sample: '真实采样优先',
+};
 
 // 刀的斩击形态：classic 为原有蓝白刀光，slash 为移植自 pixelfx 的 Slash wipe
 export const BLADE_STYLES = ['classic', 'slash'];

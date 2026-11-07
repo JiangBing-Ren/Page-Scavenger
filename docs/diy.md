@@ -48,7 +48,7 @@
 
 ```bash
 node scripts/build.mjs   # 生成 dist/
-node scripts/test.mjs    # 46 项校验，改坏了这里会红
+node scripts/test.mjs    # 51 项校验，改坏了这里会红
 ```
 
 - 只需要 Node.js，不需要 `npm install`（桌面版除外）
@@ -113,7 +113,7 @@ export const SAMPLE_ASSETS = {
   id: 'sword',
   name: '剑',
   group: 'melee',
-  input: 'drag',          // drag / click / hold / drop
+  input: 'drag',          // drag / click / hold / charge / drop
   implemented: true,      // 改成 true 才会出现在可用列表
   unit: '刀',
   scoring: 'area',        // 或 scoring: 'hit' + hitPoints: 26
@@ -130,6 +130,7 @@ export const SAMPLE_ASSETS = {
 | --- | --- |
 | `click` | `onPointerDown` 分支，参考左轮 / 炮 |
 | `hold` | `state.firing` + 渲染循环里按冷却触发，参考机枪 |
+| `charge` | `state.charging` + `onPointerUp` 里一次性发射，参考激光炮 `fireLaser` |
 | `drag` | 现有贯穿路径，通常只需在命中处按武器分支 |
 | `drop` | 在 pointerdown 放下实体，再用渲染循环逐帧结算，参考黑洞 `placeBlackhole` / `stepBlackholes` |
 

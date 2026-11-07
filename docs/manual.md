@@ -76,7 +76,7 @@ electron_mirror=https://npmmirror.com/mirrors/electron/
 
 ```bash
 node scripts/build.mjs   # 生成 dist/
-node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
+node scripts/test.mjs    # 51 项校验：几何、参数、产物、manifest
 ```
 
 构建会先清空 `dist/`。这一步是有意为之：残留的旧产物会替新产物兜底，导致「本地通过、CI 失败」。
@@ -129,17 +129,31 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 | `cannon` | 炮 | 重火力 | click | 按面积，单位「炮」 | 已实现 |
 | `revolver` | 左轮 | 枪械 | click | 每发 26 分，单位「发」 | 已实现 |
 | `machinegun` | 机枪 | 枪械 | hold | 每发 8 分，单位「发」 | 已实现 |
-| `laser` | 激光炮 | 重火力 | hold | — | 占位 |
+| `laser` | 激光炮 | 重火力 | charge | 按新增烧蚀面积，单位「束」 | 已实现 |
 | `grenade` | 手雷 | 投掷物 | drop | — | 占位 |
 | `shell` | 榴弹 | 投掷物 | drop | — | 占位 |
 | `snake` | 贪吃蛇 | 特殊 | drag | — | 占位 |
 | `blackhole` | 黑洞 | 特殊 | drop | 按面积，单位「个」 | 已实现 |
 
-输入约定：`drag` 按住拖动（贯穿判定）、`click` 单击一次、`hold` 按住持续生效、`drop` 放置或投掷后延时生效。
+输入约定：`drag` 按住拖动（贯穿判定）、`click` 单击一次、`hold` 按住持续生效、`charge` 按住蓄力松手发射、`drop` 放置或投掷后延时生效。
 
 ### 4.1 刀
 
 按住划动，贯穿后切断。切开的碎片会先露出 2px 缝、停顿 `hitStop` 毫秒，再向两侧飞散——这个停顿是手感的关键，不要随意归零。
+
+**多刀音效**：连斩时每一刀换一档挥砍音。**第 1 刀固定是单次挥砍、最后一刀固定是最后一击**，中间的刀用 `2/3/4` 三档小循环轮换，三种排列按 `2-3-4 → 3-4-2 → 4-2-3` 依次使用：
+
+```text
+5 刀    1 2 3 4 5
+6 刀    1 2 3 4 3 5
+7 刀    1 2 3 4 3 4 5
+8 刀    1 2 3 4 3 4 2 5
+11 刀   1 2 3 4 3 4 2 4 2 3 5
+```
+
+超过五刀不再无限加重，而是用中间三档循环维持强度；最后一刀始终收在「最后一击」上。中间三档由单次挥砍与最后一击按 **7:3 / 5:5 / 3:7** 混合生成（做法见 `docs/maintenance.md` §7.1）。刀序在每次按下时重置为第 1 刀。
+
+映射逻辑集中在 `engine.js` 的 `bladeSfxForCut(index, total)`：传了总刀数才能判定最后一刀——长按叠刀知道总数，普通拖动边划边切、无法预知总数，最后一档会顺延进循环。要改分组规则只动这一处。
 
 **斩击形态可切换**（`bladeStyle`：**配置面板 → 高级参数 → 刀 · 刀光 → 斩击形态**）。两种形态只改表现，贯穿判定、计分与连切完全一致：
 
@@ -209,7 +223,42 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 - 范围武器，**场内的禁区也会被一起吸走并扣分**
 - 计分按面积、单位「个」；一次吸进多个元素时吞噬音做 70ms 节流
 
-### 4.6 新增一把武器
+### 4.6 激光炮
+
+激光炮是第一个以「游戏性」而非「一次消除」为目标设计的武器：**目标不必整体消失，可以反复命中、累积损伤**。
+
+**操作**：选中激光炮后，页面上一门 canvas 绘制的炮台（圆形底座 + 炮管 + 蓄力刻度环）**固定在上一次按下的位置**，只在按下左键时重新就位，平时不跟随光标——避免发射瞬间位置跳变。按住蓄力、松手发射，光柱从炮台沿「按下点 → 松手时光标」方向射出。连续蓄力 0~`laserChargeMs`（默认 1200ms），比例线性影响光柱宽度、最大贯穿数、烧蚀带宽，以及**穿过瞄准点之后还能深入多远**：光柱长度 = 距光标距离 + 蓄力深度，所以无论短按还是满蓄力都一定越过光标，不会够不到鼠标。发射后进入 `laserCooldownMs` 冷却。
+
+**过量蓄力**：蓄满 `laserChargeMs` 后继续按住就进入过量段，光柱宽度从满蓄力的 1 倍线性涨到 **3 倍**（上限固定），涨满所需时间由 `laserOverchargeMs`（默认 1200ms）控制。射程与贯穿数在满蓄力即封顶、不再增长——过量只让贯穿口更粗，不会让光柱更长。炮台的蓄力环会亮起第二圈并从冷蓝烧到白热作为提示，满蓄力核心也随之变大变亮。
+
+**命中与损伤**：这是与其他武器最大的不同——元素**保留在 DOM 中、布局不变**，只把光柱经过的带从元素上挖掉（复合 SVG `mask-image`）。烧蚀带主体与光柱**等宽对齐**（与元素矩形求交，两端不收窄，擦边不足以成带时跳过），但两侧边缘各自带 ±12% 的多频起伏，读起来像被灼穿后余温侵蚀出的不规则缺口，而不是一刀切平的矩形。
+
+**四段因果链**：`激光 → 激光痕迹 → 灼烧效果 → 灼烧痕迹`，每一段都由上一段驱动：
+
+1. **激光**：光柱本身，0~`laserColumnMs` 扫过并收窄。
+2. **激光痕迹**：光柱扫到哪个目标，哪里才挖出切口（`state.laserBurns` 队列按目标在光柱上的投影位置排序，逐个 `applyBurn`），不是发射瞬间整条一起出现。
+3. **灼烧效果**：激光痕迹的余温把洞缘烧红。延迟 `1.0 × laserColumnMs`（光柱完全结束后）才淡入，`heat` 沿正弦先升后降，带 6 档色阶 + 两层火舌 + 上飘余烬。
+4. **灼烧痕迹**：余温散尽后留下的**永久焦黑边**（`phase: 'scar'`，2 层暗色、不发光不闪烁），一直留在元素上，直到退出斩击或撤销。
+
+两条实现要点：
+
+- **mask 用 canvas 位图而不是 SVG path**。SVG 的 `nonzero` 在两洞重叠处绕数会从 0 变成 −1、`evenodd` 会从偶数变奇数，两种规则都会让重叠区重新变实心（表现为「交叉处显出目标原样」）。改成在 canvas 上用 `destination-out` 擦除，重叠区被擦多次仍是透明，天然是并集。
+- **焦边宽度跟着烧痕走**：每层色带宽度由「烧蚀带半宽 × 灼烧程度」换算（最宽层正好等于半宽），外圈焦痕总面积与洞相当；色带沿法线推到洞的**外侧**（内缘贴住洞缘，不压进洞里盖住激光），并裁剪到目标元素矩形内。整层在**独立离屏 canvas** 合成后一次性贴回，多条烧痕交叉时不叠加过曝。
+
+**灼烧程度**（`laserBurnIntensity`，默认 1，可在 0.3~2 之间调）同时驱动三件事：焦边宽度倍率、贯穿口边缘的破碎幅度、余温持续时长。调大就会出现更宽更碎的焦痕与更久的余温，调小则接近一条干净的细缝。
+
+三档参考：`0.5` 细缝 + 短促焦边；`1` 默认，焦边宽度约等于烧痕半宽；`2` 大面积熔蚀边 + 长余温。多次命中会累积烧痕；当烧蚀面积占元素面积达到 `laserBurnThreshold`（默认 0.6）时，元素才整体消失并按整块面积结算，由此沿用现有的撤销、标记与关卡完成判定。未达阈值时，每次按**本次新增烧蚀面积**给分，单位「束」。
+
+**视觉来源**：光柱移植自 [pixelfx](https://github.com/patch-gg/pixelfx) 的 Warp in（`scifi/warp-in.js`，MIT）的中空管语言——引导虚线 → 落地过冲 → 四层管壁（冷蓝到白热）+ 滚动脉冲 + 沿柱前行的环 + 落点光池 → 收窄成线；焦边参考 Burn away（`transitions/burn-away.js`，MIT）的色阶，但火线停在烧蚀带边界，不会把目标烧完。两者的版权与 MIT 许可全文保留在 `packages/core/src/laserfx.js` 头部。`laserStyle` 当前只有 `column` 一套实现，绘制入口已按样式分发。
+
+**音效**：按下蓄力播 `laserCharge`（真实采样 7.03s，足够覆盖蓄力 + 过量段），松手发射按是否进入过量段播 `laserFire`（1.62s）或 `laserOverFire`（1.31s），每次烧蚀播 `laserHit`（合成）。`laserSoundStyle` 可切换：
+
+- **真实采样优先（默认，`sample`）**：优先播上述真实音效，文件缺失时自动回落合成。
+- **原生合成（`synth`）**：`laserFire` / `laserHit` 强制走 Web Audio，零外部依赖，用于排查或极端环境；蓄力与过量发射仍优先采样。
+
+四条音量 `sfxLaserCharge` / `sfxLaserFire` / `sfxLaserOverFire` / `sfxLaserHit` 可单独调；`sfxLaserBeam` 是备用合成嗡鸣的音量。
+
+### 4.7 新增一把武器
 
 1. `weapons.js` 补定义，把 `implemented` 改成 `true`
 2. `engine.js` 按它的 `input` 接对应输入分支（`click` 在 pointerdown、`hold` 用 `state.firing` + 渲染循环里的冷却触发、`drag` 走现有贯穿路径、`drop` 在 pointerdown 放下并在渲染循环里逐帧结算）
@@ -231,7 +280,7 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 
 ### 5.2 计分单位
 
-单位跟随武器：刀按面积给分、单位「刀」；炮按面积给分、单位「炮」；黑洞按面积给分、单位「个」；左轮每命中 26 分、机枪每命中 8 分，单位都是「发」。
+单位跟随武器：刀按面积给分、单位「刀」；炮按面积给分、单位「炮」；激光炮每次按**本次新增烧蚀面积**给分、单位「束」，烧蚀达阈值整体消失时再按整块面积结算一次；黑洞按面积给分、单位「个」；左轮每命中 26 分、机枪每命中 8 分，单位都是「发」。
 
 ### 5.3 关卡计分
 
@@ -285,6 +334,7 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 | 炮 | 爆破 / 裂缝 / 音效 |
 | 左轮 | 射击与弹仓 / 音效 |
 | 机枪 | 射击 / 音效 |
+| 激光炮 | 光束 / 判定 / 音效 |
 | 黑洞 | 引力 / 吞噬 / 音效 |
 
 - **刀 · 多刀**：单目标最多刀数、叠刀间距、逐刀起始间隔/递减系数/最小间隔
@@ -294,6 +344,9 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 - **炮 · 裂缝**：破碎形态（放射裂纹 / 玻璃碎裂 Shatter wipe）、玻璃碎裂时长、粗细、长短、起点宽度、末端宽度
 - **左轮 · 射击与弹仓**：弹孔大小、射击间隔、弹仓容量、换弹时间、抛壳开关
 - **机枪 · 射击**：弹孔大小、射速间隔、散布、枪口火光
+- **激光炮 · 光束**：视觉形态、满蓄力光柱宽、光柱动画时长
+- **激光炮 · 判定**：满蓄力时长、过量蓄力时长、发射冷却、满蓄力射程、贯穿上限、烧毁阈值、灼烧程度
+- **激光炮 · 音效**：音效来源（真实采样优先 / 原生合成）、蓄力、发射、过量发射、烧蚀、蓄力嗡鸣（兜底）
 - **黑洞 · 引力**：视觉形态（3D 吸积盘 / 2D 平面奇点）、初始大小、引力场、可吸面积比、放置间隔、存活时长
 - **黑洞 · 吞噬**：撕裂阈值、成长效率、面积上限
 - **各武器 · 音效**：对应效果的 0~2 倍率
@@ -315,11 +368,11 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 
 ## 8. 音效
 
-音效统一走 `sound.js` 的 `play(name)`，共 15 个效果：
+音效统一走 `sound.js` 的 `play(name)`，共 20 个合成效果 + 11 个采样音效：
 
-刀·挥砍/切入/碎裂、炮·开火/裂缝/爆散、左轮·开火/弹孔/换弹、机枪·开火/弹着、黑洞·生成/吸附/吞噬、弹壳落地。
+刀·五档挥砍（全部采样）/切入/碎裂、炮·开火/裂缝/爆散、左轮·开火/弹孔/换弹、机枪·开火/弹着、激光炮·蓄力（采样）/发射（采样）/过量发射（采样）/烧蚀、黑洞·生成/吸附/吞噬、弹壳落地。
 
-黑洞的吸附音是持续嗡鸣，走独立的 `startHum()` / `stopHum()`，不经过 `play()`；`blackholeHum` 这个效果名只用于配置器试听 1.2 秒的短版本。
+黑洞的吸附音走独立的 `startHum(name)` / `stopHum()`，不经过 `play()`；`HUM_PRESETS` 里也保留了一组 `laserBeam` 预设，作为蓄力采样缺失时的备用嗡鸣。`blackholeHum` / `laserBeam` 这两个效果名在 `play()` 里只用于配置器试听 1.2 秒的短版本。
 
 **开火音与破坏音是分离的两层**：开火在武器分支播放，命中/摧毁在 `holeDestroy` 里按当前武器播放。
 
@@ -334,10 +387,20 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 | `shell-drop.mp3` | 弹壳落地 | 0.98s | 1 | 0.6 |
 | `revolver-fire.mp3` | 左轮开火 | 2.25s | 1（±8% 随机） | 0.7 |
 | `revolver-reload.mp3` | 左轮换弹 | 3.22s | 2（≈1.6s） | 2 |
+| `blade-swing.mp3` | 刀第 1 刀（单次挥砍） | 0.98s | 1（±10% 随机） | 0.85 |
+| `blade-swing-2.wav` | 刀第 2 刀（过渡 7:3） | 0.98s | 1（±5% 随机） | 0.9 |
+| `blade-swing-3.wav` | 刀第 3 刀（过渡 5:5） | 0.98s | 1（±5% 随机） | 0.9 |
+| `blade-swing-4.wav` | 刀第 4 刀（过渡 3:7） | 0.98s | 1（±5% 随机） | 0.9 |
+| `blade-finish.wav` | 刀第 5 刀（多刀最后一击） | 0.99s | 1（±4% 随机） | 0.95 |
+| `laser-charge.mp3` | 激光蓄力 | 7.03s | 1 | 0.85 |
+| `laser-fire.mp3` | 激光发射 | 1.62s | 1（±6% 随机） | 0.9 |
+| `laser-overfire.mp3` | 过量蓄力发射 | 1.31s | 1（±5% 随机） | 0.95 |
 
 播放增益 = 总音量 × 倍率 × `gain`，上限 4。校准后的这一档就是配置里的「1」，调音时优先动 `gain`。
 
-逐样本实测峰值：弹壳 1.01、开火 1.10、换弹 1.04——素材本身已超过满刻度，默认总音量下换弹约 1.25，**会削波**。听到爆音先降该采样的 `gain`。
+逐样本实测峰值：弹壳 1.01、开火 1.10、换弹 1.04——素材本身已超过满刻度，默认总音量下换弹约 1.25，**会削波**。听到爆音先降该采样的 `gain`。新增的 5 个采样未做峰值实测（MP3 需解码器），`gain` 先按 0.85~0.95 保守取值；削波时同样优先降 `gain`。
+
+蓄力音 7.03s 远长于 `laserChargeMs + laserOverchargeMs`（默认 2.4s），所以每次蓄力只播前段、不循环；若把蓄力时长调到 7s 以上，会听到音效提前结束——这是预期行为，改 `laserChargeMs` 时留意。
 
 ### 8.2 新增一个采样
 
@@ -354,7 +417,7 @@ node scripts/test.mjs    # 46 项校验：几何、参数、产物、manifest
 - **工具栏**：后退 / 刷新 / 起始页 / 关卡 / 地址栏（可直接输搜索词）/ 开始斩击 / 装到我的浏览器 / ⚙ 配置
 - **安装导览**：自动探测本机 Chrome / Edge / Brave / Vivaldi / Opera / Firefox，给出逐步操作，可直接打开对应扩展管理页并复制扩展目录
 - **快捷键**：`Alt+S` 开关斩击，`Esc` 退出
-- **自检**：`ADSLASH_SELFTEST=1 npm run desktop` 激活引擎并输出 canvas 尺寸、目标数；加 `ADSLASH_SELFTEST_LEVEL=ads-alley` 会模拟一次划动并打印拆解结果；再加 `ADSLASH_SELFTEST_WEAPON=cannon` 会切武器并开一炮
+- **自检**：`ADSLASH_SELFTEST=1 npm run desktop` 激活引擎并输出 canvas 尺寸、目标数；加 `ADSLASH_SELFTEST_LEVEL=ads-alley` 会模拟一次划动并打印拆解结果；再加 `ADSLASH_SELFTEST_WEAPON=cannon` 会切武器并开一炮；`ADSLASH_SELFTEST_WEAPON=laser` 会按住 1300ms 蓄满再松手发射一次贯穿光柱（charge 类走 pointerdown → pointermove → 1300ms → pointerup）
 
 桌面版必须关闭 `backgroundThrottling`：窗口失焦时 `setTimeout` 会被节流到秒级，逐刀序列与碎片动画都会卡住。
 
@@ -402,9 +465,11 @@ packages/
     fragments.js   切分、爆破碎块、裂缝、烟雾、弹壳
     pieces.js      碎片注册表与坐标变换（支持连切）
     render.js      刀光、爆痕、枪焰、弹仓、弹壳、黑洞与裂纹叠加层
+    burns.js       局部烧蚀：锯齿焦边、复合 mask、损伤累积与阈值结算
+    laserfx.js     Warp in 光柱、炮台、Burn away 焦边（含第三方 MIT 声明）
     shatter.js     Shatter wipe：楔形网格、时序裂纹、玻璃碎片动画
     slashwipe.js   Slash wipe：白热刀线、两半滑开分离、火花与切口亮带
-    sound.js       15 个命名音效（采样优先 + 合成兜底）
+    sound.js       18 个命名音效（采样优先 + 合成兜底）
     assets/        音效采样
     score.js / freescore.js  关卡计分 / 自由模式计分
   extension/     MV3 外壳（Chrome / Firefox 双 manifest）
@@ -415,7 +480,7 @@ packages/
 scripts/
   build.mjs      零依赖 ESM→IIFE 打包器
   make-icons.mjs 程序化生成 PNG 图标
-  test.mjs       46 项校验
+  test.mjs       51 项校验
 ```
 
 宿主只负责三件事：提供存储适配器、决定何时激活、把配置塞进来。任何 `chrome.*` / `browser.*` 出现在 `core/` 都会让测试失败。
@@ -455,8 +520,12 @@ Electron 的 `sendInputEvent` 在窗口未持续绘制时会被合并成 1~2 个
 | [Sprite Fusion ice shatter](https://www.spritefusion.com/pixel-art-vfx/ice) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的撞击闪光、放射裂纹与玻璃碎片处理 |
 | [pixelfx](https://github.com/patch-gg/pixelfx) · Slash wipe | MIT，Copyright (c) 2026 Patch | 刀的「白热刃口」形态（`packages/core/src/slashwipe.js`） |
 | [Sprite Fusion slash](https://www.spritefusion.com/pixel-art-vfx/slash) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的锥形冷却拖尾、点状残迹、刀尖星芒与刃口火花 |
+| [pixelfx](https://github.com/patch-gg/pixelfx) · Warp in | MIT，Copyright (c) 2026 Patch | 激光炮的中空光柱（`packages/core/src/laserfx.js`） |
+| [Sprite Fusion holy light](https://www.spritefusion.com/pixel-art-vfx/holy-light) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的管壁分层、滚动脉冲、下行环与落点光池 |
+| [pixelfx](https://github.com/patch-gg/pixelfx) · Burn away | MIT，Copyright (c) 2026 Patch | 激光炮的参差焦边与色阶（`packages/core/src/laserfx.js`） |
+| [Sprite Fusion fire](https://www.spritefusion.com/pixel-art-vfx/fire) | MIT，Copyright (c) 2026 Hugo Duprez | 上游的分层火舌、余烬与灰烬 |
 
-上述 MIT 版权与许可全文分别保留在 `packages/core/src/shatter.js` 与 `packages/core/src/slashwipe.js` 头部；MIT 与本项目 GPL-3.0-only 兼容。黑洞的两套视觉形态同样参考了 pixelfx 的 black-hole / void-orb（MIT）。
+上述 MIT 版权与许可全文分别保留在 `packages/core/src/shatter.js`、`packages/core/src/slashwipe.js` 与 `packages/core/src/laserfx.js` 头部；MIT 与本项目 GPL-3.0-only 兼容。黑洞的两套视觉形态同样参考了 pixelfx 的 black-hole / void-orb（MIT）；`burns.js` 的焦边噪声思路参考 Burn away，但未复制其代码。
 
 参与贡献见 [CONTRIBUTING.md](../CONTRIBUTING.md)。提交 PR 前请阅读 [CLA](CLA.md)：本项目采用双许可，接受贡献前需要你同意其中条款。
 

@@ -5,10 +5,11 @@
 //   3. 实现它的命中与表现，复用 spawnDOMFragments / reslicePiece / spawnSparks
 //
 // input 约定：
-//   drag  —— 按住左键拖动（贯穿判定）
-//   click —— 单击触发一次
-//   hold  —— 按住持续生效（射速/光束）
-//   drop  —— 点击放置或投掷，落地/延时后生效
+//   drag   —— 按住左键拖动（贯穿判定）
+//   click  —— 单击触发一次
+//   hold   —— 按住持续生效（射速/光束）
+//   charge —— 按住蓄力、松手一次性发射
+//   drop   —— 点击放置或投掷，落地/延时后生效
 
 export const WEAPONS = Object.freeze([
   {
@@ -77,9 +78,12 @@ export const WEAPONS = Object.freeze([
     id: 'laser',
     name: '激光炮',
     group: 'heavy',
-    input: 'hold',
-    implemented: false,
-    desc: '持续光束，沿光标扫过的路径切割。',
+    input: 'charge',
+    implemented: true,
+    unit: '束',
+    scoring: 'area',
+    hitFilter: 'brightness(2.6) contrast(1.4) saturate(0.7)',
+    desc: '按住蓄力、松手发射一道贯穿光柱；沿途目标被烧出焦痕但保留，烧够面积才彻底消失。',
   },
   {
     id: 'grenade',

@@ -88,7 +88,9 @@ export function createFreeScore() {
     state.unit = weapon && weapon.unit ? weapon.unit : '刀';
 
     const fixed = !!(weapon && weapon.scoring === 'hit' && Number.isFinite(weapon.hitPoints));
-    const points = fixed ? weapon.hitPoints : basePointsForArea(rect.width * rect.height);
+    // 激光炮等局部损伤武器按本次新增烧蚀面积给分，其余按整块面积
+    const area = Number(info && info.area);
+    const points = fixed ? weapon.hitPoints : basePointsForArea(area > 0 ? area : rect.width * rect.height);
     const gain = scoreForSlash([points], state.combo, 0).total;
     state.score += gain;
     state.hits++;

@@ -8,7 +8,15 @@ import { fileURLToPath } from 'node:url';
 
 import { getSplitPolygons, polygonArea, signedArea, ensureWinding } from '../packages/core/src/geometry.js';
 import { visibleBox } from '../packages/core/src/fragments.js';
-import { DEFAULT_CONFIG, SIZE_LEVELS, HIT_STOPS, CANNON_BREAK_STYLES, BLADE_STYLES } from '../packages/core/src/config.js';
+import {
+  DEFAULT_CONFIG,
+  SIZE_LEVELS,
+  HIT_STOPS,
+  CANNON_BREAK_STYLES,
+  BLADE_STYLES,
+  LASER_STYLES,
+  LASER_SOUND_STYLES,
+} from '../packages/core/src/config.js';
 import {
   basePointsForArea,
   comboMultiplier,
@@ -21,8 +29,12 @@ import { createFreeScore, COMBO_WINDOW_MS } from '../packages/core/src/freescore
 import { splitPolygon, splitPolygonMany } from '../packages/core/src/pieces.js';
 import { WEAPONS, getWeapon, implementedWeapons, blastSamplePoints } from '../packages/core/src/weapons.js';
 import { drawBlackholes, drawShatterWipes, drawSlashWipes, renderSlashWipeTrail } from '../packages/core/src/render.js';
+import { drawLaserEmitter, drawLaserColumn, drawBurnEdges } from '../packages/core/src/laserfx.js';
+import { buildBurnBand, applyBurn, restoreBurn, activeBurnEdges, clearBurns, burnCount } from '../packages/core/src/burns.js';
 import { buildShatterPattern, SHATTER_IMPACT, SHATTER_BURST } from '../packages/core/src/shatter.js';
 import { buildSlashPattern, SLASH_EDGE_END, SLASH_SLIP, SLASH_SPLIT } from '../packages/core/src/slashwipe.js';
+import { SAMPLE_ASSETS } from '../packages/core/src/sound.js';
+import { chargeWidthMul, OVERCHARGE_WIDTH_CAP, bladeSfxForCut } from '../packages/core/src/engine.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -546,7 +558,7 @@ await check('注册表包含全部 11 种武器且 id 不重复', () => {
 });
 
 await check('每种武器字段完整、输入方式合法', () => {
-  const inputs = ['drag', 'click', 'hold', 'drop'];
+  const inputs = ['drag', 'click', 'hold', 'charge', 'drop'];
   for (const weapon of WEAPONS) {
     assert.ok(weapon.id && weapon.name && weapon.group && weapon.desc, weapon.id || '?');
     assert.ok(inputs.includes(weapon.input), `${weapon.id} input=${weapon.input}`);
@@ -554,10 +566,10 @@ await check('每种武器字段完整、输入方式合法', () => {
   }
 });
 
-await check('框架阶段已实现：刀、炮、左轮、机枪、黑洞', () => {
+await check('框架阶段已实现：刀、炮、左轮、机枪、激光炮、黑洞', () => {
   assert.deepEqual(
     implementedWeapons().map((w) => w.id),
-    ['blade', 'cannon', 'revolver', 'machinegun', 'blackhole']
+    ['blade', 'cannon', 'revolver', 'machinegun', 'laser', 'blackhole']
   );  assert.equal(getWeapon('blackhole').id, 'blackhole');
   assert.equal(getWeapon('nope'), null);
   assert.equal(DEFAULT_CONFIG.weapon, 'blade');
@@ -800,6 +812,202 @@ await check('Slash wipe 刀线几何、时间轴与叠加层', () => {
   calls.length = 0;
   renderSlashWipeTrail(ctx, [{ x: 0, y: 0 }, { x: 40, y: 20 }, { x: 90, y: 50 }], 14, 0.8);
   assert.ok(calls.filter((k) => k === 'stroke').length > 0, '白热轨迹应画出核心线');
+});
+
+await check('多刀音效按刀序取档，最后一刀固定为最后一击', () => {
+  // 把音效名压成数字便于比对：bladeSwing→1、bladeSwingN→N、bladeFinish→5
+  const seq = (n) =>
+    Array.from({ length: n }, (_, i) =>
+      bladeSfxForCut(i + 1, n).replace('bladeFinish', '5').replace('bladeSwing', '') || '1'
+    ).join('');
+
+  // 第 1 刀固定 1、最后一刀固定 5，中间按 2-3-4 / 3-4-2 / 4-2-3 轮换
+  assert.equal(seq(5), '12345');
+  assert.equal(seq(6), '123435');
+  assert.equal(seq(7), '1234345');
+  assert.equal(seq(8), '12343425');
+  assert.equal(seq(11), '12343424235');
+
+  assert.equal(bladeSfxForCut(0), 'bladeSwing', '越界刀序应回落到第 1 刀');
+  assert.equal(
+    bladeSfxForCut(5),
+    'bladeSwing3',
+    '不传总刀数时判定不出最后一刀，第 5 刀应顺延进中间循环'
+  );
+
+  for (const key of ['bladeSwing', 'bladeSwing2', 'bladeSwing3', 'bladeSwing4', 'bladeFinish']) {
+    assert.ok(SAMPLE_ASSETS[key], `${key} 需登记采样槽位`);
+  }
+});
+
+console.log('\n[14] 激光炮：蓄力贯穿与局部烧蚀');
+
+await check('注册与蓄力配置默认值', () => {
+  const laser = getWeapon('laser');
+  assert.equal(laser.implemented, true);
+  assert.equal(laser.input, 'charge');
+  assert.equal(laser.unit, '束');
+  assert.equal(laser.scoring, 'area');
+  assert.ok(laser.hitFilter, '命中滤镜不能为空');
+  assert.equal(DEFAULT_CONFIG.laserStyle, 'column');
+  assert.equal(DEFAULT_CONFIG.laserSoundStyle, 'sample', '默认应优先真实采样');
+  assert.ok(DEFAULT_CONFIG.laserWidth > 0);
+  assert.ok(DEFAULT_CONFIG.laserChargeMs >= 200);
+  assert.ok(DEFAULT_CONFIG.laserRange >= 200);
+  assert.ok(DEFAULT_CONFIG.laserBurnThreshold > 0 && DEFAULT_CONFIG.laserBurnThreshold <= 1);
+  assert.ok(DEFAULT_CONFIG.laserMaxTargets >= 1);
+  assert.deepEqual(LASER_STYLES, ['column']);
+  assert.deepEqual(LASER_SOUND_STYLES, ['synth', 'sample']);
+
+  // 过量蓄力：满蓄力 1 倍，继续按住线性涨到 3 倍
+  assert.ok(DEFAULT_CONFIG.laserOverchargeMs >= 200, '过量蓄力时长必须有默认值');
+  assert.equal(OVERCHARGE_WIDTH_CAP, 3, '过量蓄力宽度上限应为满蓄力的 3 倍');
+  assert.ok(Math.abs(chargeWidthMul(1, 0) - 1) < 1e-6, '满蓄力宽度倍率应为 1');
+  assert.ok(Math.abs(chargeWidthMul(1, 1) - 3) < 1e-6, '过量蓄满宽度倍率应为 3');
+  assert.ok(Math.abs(chargeWidthMul(0, 0) - 0.35) < 1e-6, '短按宽度倍率应为 0.35');
+  assert.ok(chargeWidthMul(1, 0.5) > chargeWidthMul(1, 0), '过量蓄力必须单调增宽');
+  assert.ok(chargeWidthMul(2, 2) <= OVERCHARGE_WIDTH_CAP + 1e-6, '超出上限不得继续变宽');
+});
+
+await check('烧蚀带几何、复合 mask 与阈值结算', () => {
+  const bounds = { w: 100, h: 100 };
+  const band = buildBurnBand({ x: 0, y: 50 }, { x: 100, y: 50 }, 12, 7, bounds);
+  assert.ok(band, '应生成烧蚀带');
+  assert.ok(band.poly.length >= 4, 'mask 应是有起伏的多边形');
+  assert.ok(band.area > 0, '烧蚀面积必须为正');
+  assert.equal(band.left.length, band.right.length);
+  assert.ok(new Set(band.left.map((p) => p[1].toFixed(2))).size > 3, '焦边必须参差，不能是直线');
+  // 与光柱对齐：整体宽度仍在 2*half 附近（允许 ±12% 起伏），不能收窄成点
+  const ys = band.poly.map((p) => p[1]);
+  const span = Math.max(...ys) - Math.min(...ys);
+  assert.ok(span > 24 * 0.75, `烧蚀带宽度 ${span.toFixed(1)}px 明显窄于光柱`);
+  assert.ok(
+    band.poly.every(([x, y]) => x >= -1e-6 && x <= 100 + 1e-6 && y >= -1e-6 && y <= 100 + 1e-6),
+    '烧蚀带必须裁在元素矩形内'
+  );
+  assert.equal(
+    buildBurnBand({ x: 0, y: 50 }, { x: 1, y: 50 }, 12, 3, bounds),
+    null,
+    '擦边退化成点时不产生烧痕'
+  );
+
+  const el = {
+    style: {
+      maskImage: '', webkitMaskImage: '', maskSize: '', maskRepeat: '',
+      webkitMaskSize: '', webkitMaskRepeat: '',
+    },
+    isConnected: true,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }),
+  };
+
+  const r1 = applyBurn(el, band, { threshold: 0.9 });
+  assert.ok(String(el.style.maskImage).length > 10, '元素应挂上复合 mask');
+  assert.ok(r1.ratio > 0 && r1.complete === false, '首发射不应直接烧毁目标');
+  assert.equal(activeBurnEdges(1000, 1e6).length, 0, '延迟未到前灼烧不应出现');
+  const liveEdges = activeBurnEdges(1000, 0);
+  assert.ok(liveEdges.length >= 1, '延迟到期后灼烧应可见');
+  assert.ok(
+    liveEdges.every((e) => e.phase === 'glow'),
+    '刚烧完应处于余温发光阶段（之后才转成永久焦痕 scar）'
+  );
+
+  const r2 = applyBurn(el, buildBurnBand({ x: 0, y: 20 }, { x: 100, y: 20 }, 12, 11, bounds), { threshold: 0.9 });
+  assert.ok(r2.ratio > r1.ratio, '多次命中必须累积烧蚀面积');
+  assert.equal(burnCount(), 1, '同一元素只应有一条损伤记录');
+  assert.ok(activeBurnEdges(1000).length >= 2, '发热中的焦边应能被 canvas 读取');
+
+  const r3 = applyBurn(el, buildBurnBand({ x: 0, y: 70 }, { x: 100, y: 70 }, 12, 13, bounds), { threshold: 0.05 });
+  assert.equal(r3.complete, true, '达到阈值应交给引擎整体结算');
+
+  restoreBurn(el);
+  assert.equal(el.style.maskImage, '', '撤销必须恢复原 mask');
+  clearBurns();
+  assert.equal(burnCount(), 0);
+});
+
+await check('炮台、光柱与焦边按样式分发且批量绘制', () => {
+  const calls = [];
+  const ctx = new Proxy({}, {
+    get(_t, key) {
+      if (key === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => calls.push(key);
+    },
+    set() { return true; },
+  });
+  const t = performance.now();
+
+  drawLaserEmitter(ctx, { active: true, x: 0, y: 0, aimX: 100, aimY: 0, charge: 0.7, recoil: 0.2 }, {});
+  assert.ok(calls.filter((k) => k === 'stroke').length >= 2, '炮台应画出底座与蓄力环');
+
+  calls.length = 0;
+  const column = {
+    from: { x: 0, y: 0 }, to: { x: 600, y: 0 }, width: 18,
+    t0: t - 300, durationMs: 900, style: 'column', charge: 1,
+  };
+  drawLaserColumn(ctx, column, t, { laserStyle: 'column' });
+  const colStrokes = calls.filter((k) => k === 'stroke').length;
+  assert.ok(colStrokes > 0 && colStrokes <= 8, `光柱应批量绘制，实际 stroke ${colStrokes} 次`);
+  assert.equal(
+    calls.filter((k) => k === 'save').length,
+    calls.filter((k) => k === 'restore').length,
+    'canvas 状态必须配对'
+  );
+
+  calls.length = 0;
+  drawLaserColumn(ctx, column, t, { laserStyle: 'other' });
+  assert.equal(calls.length, 0, '未实现的形态不应绘制，预留后续接入');
+
+  calls.length = 0;
+  drawBurnEdges(ctx, [{
+    heat: 0.8,
+    left: [[0, 0], [50, 2], [100, 0]],
+    right: [[0, 8], [50, 10], [100, 8]],
+  }], t);
+  const burnStrokes = calls.filter((k) => k === 'stroke').length;
+  assert.ok(burnStrokes >= 6 && burnStrokes <= 10, `焦边应有完整色阶且合并 path，实际 stroke ${burnStrokes} 次`);
+
+  // 焦边宽度必须跟着烧蚀带半宽缩放，而不是固定像素
+  const widths = [];
+  const ctx2 = new Proxy({}, {
+    get(_t, key) {
+      if (key === 'createRadialGradient') return () => ({ addColorStop() {} });
+      return () => {};
+    },
+    set(_t, key, value) {
+      if (key === 'lineWidth') widths.push(value);
+      return true;
+    },
+  });
+  drawBurnEdges(ctx2, [{
+    heat: 0.8, half: 20, intensity: 1, nx: 0, ny: 1,
+    left: [[0, 20], [80, 20]], right: [[0, -20], [80, -20]],
+  }], performance.now());
+  assert.ok(widths.includes(20), `最宽层应等于烧蚀半宽，实际宽度 ${widths.join(',')}`);
+});
+
+await check('音效槽位与切换枚举', () => {
+  for (const key of [
+    'laserCharge',
+    'laserFire',
+    'laserOverFire',
+    'laserHit',
+    'bladeSwing',
+    'bladeFinish',
+  ]) {
+    assert.ok(SAMPLE_ASSETS[key], `${key} 需登记采样槽位`);
+  }
+  assert.ok(!SAMPLE_ASSETS.laserBeam, '蓄力嗡鸣需循环播放，不应走一次性采样');
+  assert.deepEqual(LASER_SOUND_STYLES, ['synth', 'sample']);
+  for (const key of [
+    'sfxLaserCharge',
+    'sfxLaserFire',
+    'sfxLaserOverFire',
+    'sfxLaserHit',
+    'sfxBladeSwing',
+    'sfxBladeFinish',
+  ]) {
+    assert.equal(DEFAULT_CONFIG[key], 1, `${key} 应有默认音量`);
+  }
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);
