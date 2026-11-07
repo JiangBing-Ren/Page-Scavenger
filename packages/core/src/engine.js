@@ -5,7 +5,8 @@ import {
   CANNON_BREAK_STYLES,
   BLADE_STYLES,
   LASER_STYLES,
-  LASER_SOUND_STYLES,
+  SFX_PRESETS,
+  SFX_SOURCES,
 } from './config.js';
 import { cssPath } from './selector.js';
 import { findSlashTarget } from './targeting.js';
@@ -1852,8 +1853,13 @@ export function createCleaner(options) {
       if (key === 'laserStyle') {
         if (LASER_STYLES.indexOf(value) === -1) continue;
       }
-      if (key === 'laserSoundStyle') {
-        if (LASER_SOUND_STYLES.indexOf(value) === -1) continue;
+      // 武器级来源档位：sample / synth / custom
+      if (key.slice(-11) === 'SoundSource') {
+        if (SFX_PRESETS.indexOf(value) === -1) continue;
+      }
+      // 逐项来源偏好：只接受 sample / synth
+      if (key.indexOf('sfx') === 0 && key.slice(-6) === 'Source') {
+        if (SFX_SOURCES.indexOf(value) === -1) continue;
       }
       // 换武器统一走 setWeapon：补弹仓、收掉残留黑洞都在这条路径上
       if (key === 'weapon') {

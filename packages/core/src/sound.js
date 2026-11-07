@@ -1,6 +1,7 @@
 // 音效分两层：能取到采样文件就播采样，取不到或解码失败时回落到 Web Audio 合成。
 // 每个效果是独立的声音（VOICES），各自受 sfx<Name> 音量倍率控制，
 // 便于在配置器里逐项对比、单独静音。
+import { pickSfxSource } from './sfxprofile.js';
 
 // 采样清单。宿主只需按 file 提供 URL（扩展）或字节（桌面）；
 // rate 是固定播放倍速，jitter 是每次播放的随机倍速浮动幅度（0 = 不浮动）；
@@ -22,8 +23,8 @@ export const SAMPLE_ASSETS = {
   laserCharge: { file: 'laser-charge.mp3', jitter: 0, gain: 0.85 },
   laserFire: { file: 'laser-fire.mp3', jitter: 0.06, gain: 0.9 },
   laserOverFire: { file: 'laser-overfire.mp3', jitter: 0.05, gain: 0.95 },
-  // 烧蚀命中暂无采样，留给 Web Audio 合成
-  laserHit: { file: 'laser-hit.mp3', jitter: 0.14, gain: 0.8 },
+  // 烧蚀命中（laserHit）目前只有合成实现。sampleUrls 是按这份清单拼路径的，
+  // 登记一个不存在的文件会让 UI 以为有采样、实际却要回落——所以宁可不登记。
 };
 
 export function sampleUrls(getUrl) {
@@ -73,6 +74,146 @@ function noiseBuffer(ctx) {
 }
 
 let cachedNoise = null;
+
+const VOICES = {
+  // 刀：气流扫频，偏“呼”的质感
+  bladeSwing(ctx, vol) {
+    swept(ctx, 0.26 * vol, 'bandpass', 480, 2800, 1.0, 0.2, 0.025);
+    tone(ctx, 0.05 * vol, 'sine', 700, 1500, 0.12, 0.02);
+  },
+
+  // 刀：切入金属，高频“锵”
+  bladeCut(ctx, vol) {
+    tone(ctx, 0.12 * vol, 'triangle', 1800, 3200, 0.1, 0.004);
+    click(ctx, 0.16 * vol, 4200, 0.06, 3.2);
+  },
+
+  // 刀：碎裂，多个短噪声错落
+  bladeBreak(ctx, vol) {
+    click(ctx, 0.22 * vol, 2600, 0.07, 1.6);
+    setTimeout(() => click(ctx, 0.17 * vol, 1800, 0.09, 1.4), 55);
+    setTimeout(() => click(ctx, 0.12 * vol, 1200, 0.12, 1.2), 120);
+    tone(ctx, 0.1 * vol, 'triangle', 900, 500, 0.16, 0.01);
+  },
+
+  // 炮：低频轰击
+  cannonFire(ctx, vol) {
+    tone(ctx, 0.62 * vol, 'sine', 95, 28, 0.5, 0.005);
+    swept(ctx, 0.3 * vol, 'lowpass', 900, 320, 0.7, 0.42, 0.01);
+  },
+
+  // 炮：裂缝逐块蔓延，短促的断裂
+  cannonCrack(ctx, vol) {
+    click(ctx, 0.2 * vol, 1600, 0.05, 1.4);
+    tone(ctx, 0.07 * vol, 'square', 320, 180, 0.06, 0.004);
+  },
+
+  // 炮：终局爆散，低频 + 碎屑
+  cannonBreak(ctx, vol) {
+    tone(ctx, 0.5 * vol, 'sine', 120, 34, 0.38, 0.004);
+    swept(ctx, 0.34 * vol, 'highpass', 900, 2600, 0.8, 0.3, 0.006);
+  },
+
+  // 左轮：闷响 + 锐利爆裂
+  revolverFire(ctx, vol) {
+    tone(ctx, 0.5 * vol, 'sine', 150, 42, 0.34, 0.004);
+    swept(ctx, 0.4 * vol, 'highpass', 1200, 1900, 0.9, 0.1, 0.004);
+  },
+
+  // 左轮：弹孔命中，闷闷的“噗”
+  revolverHit(ctx, vol) {
+    tone(ctx, 0.18 * vol, 'sine', 260, 120, 0.16, 0.008);
+    swept(ctx, 0.14 * vol, 'lowpass', 900, 400, 0.8, 0.14, 0.01);
+  },
+
+  // 机枪：高频短促“哒”
+  machinegunFire(ctx, vol) {
+    tone(ctx, 0.2 * vol, 'square', 1500, 620, 0.06, 0.003);
+    swept(ctx, 0.18 * vol, 'bandpass', 2600, 1800, 1.6, 0.05, 0.003);
+  },
+
+  // 机枪：弹着，极短的碎屑声
+  machinegunHit(ctx, vol) {
+    click(ctx, 0.14 * vol, 3200, 0.035, 2.2);
+  },
+
+  // 换弹：两声金属咔哒 + 弹仓旋转
+  reload(ctx, vol) {
+    click(ctx, 0.7 * vol, 2400, 0.09, 2.6);
+    setTimeout(() => click(ctx, 0.58 * vol, 1500, 0.11, 2.2), 130);
+    setTimeout(() => tone(ctx, 0.32 * vol, 'square', 240, 80, 0.34, 0.01), 20);
+  },
+
+  // 弹壳落地：优先用采样，合成兜底用非谐波分音模拟金属撞击
+  shellDrop(ctx, vol) {
+    const base = 900 + Math.random() * 320;
+    const ratios = [1, 2.76, 5.4, 8.93];
+    ratios.forEach((ratio, i) => {
+      const partial = (0.22 / (i + 1)) * vol;
+      tone(ctx, partial, 'sine', base * ratio, base * ratio * 0.9, 0.22 - i * 0.04, 0.002);
+    });
+    click(ctx, 0.28 * vol, 4200, 0.02, 4);
+  },
+
+  // 黑洞：生成，低频下坠 + 空气被抽走
+  blackholeOpen(ctx, vol) {
+    tone(ctx, 0.5 * vol, 'sine', 150, 34, 0.8, 0.02);
+    swept(ctx, 0.22 * vol, 'lowpass', 1400, 180, 0.9, 0.7, 0.05);
+  },
+
+  // 黑洞：持续嗡鸣。实际播放走 startHum，这里只做 1.2 秒版本给配置器试听
+  blackholeHum(ctx, vol) {
+    tone(ctx, 0.12 * vol, 'sine', 58, 52, 1.2, 0.12);
+    tone(ctx, 0.06 * vol, 'triangle', 87, 79, 1.2, 0.12);
+    swept(ctx, 0.05 * vol, 'lowpass', 520, 260, 0.8, 1.2, 0.15);
+  },
+
+  // 黑洞：吞噬，短促下坠
+  blackholeEat(ctx, vol) {
+    tone(ctx, 0.16 * vol, 'sine', 620, 90, 0.16, 0.004);
+    click(ctx, 0.1 * vol, 1200, 0.05, 1.8);
+  },
+
+  // 激光炮：满蓄力后的一次性发射，低频轰击 + 高频撕裂
+  laserFire(ctx, vol) {
+    tone(ctx, 0.42 * vol, 'sawtooth', 620, 90, 0.42, 0.005);
+    tone(ctx, 0.26 * vol, 'sine', 120, 42, 0.4, 0.004);
+    swept(ctx, 0.3 * vol, 'highpass', 1200, 4200, 1.0, 0.28, 0.006);
+    click(ctx, 0.2 * vol, 3200, 0.05, 2.0);
+  },
+
+  // 激光炮：烧蚀命中，嘶嘶声 + 闷响
+  laserHit(ctx, vol) {
+    swept(ctx, 0.2 * vol, 'bandpass', 2600, 900, 0.8, 0.16, 0.01);
+    click(ctx, 0.12 * vol, 1800, 0.04, 1.6);
+    tone(ctx, 0.08 * vol, 'triangle', 420, 180, 0.12, 0.006);
+  },
+
+  // 激光炮：蓄力持续嗡鸣。实际播放走 startHum('laserBeam')，这里只做 1.2 秒试听版
+  laserBeam(ctx, vol) {
+    tone(ctx, 0.08 * vol, 'sine', 180, 420, 1.2, 0.08);
+    tone(ctx, 0.05 * vol, 'triangle', 360, 840, 1.2, 0.08);
+    swept(ctx, 0.04 * vol, 'bandpass', 1600, 4200, 1.4, 1.2, 0.1);
+  },
+
+  // 激光炮：蓄力采样缺失时的合成兜底（1.2 秒上扬，与 laserChargeMs 对齐）
+  laserCharge(ctx, vol) {
+    tone(ctx, 0.1 * vol, 'sine', 160, 480, 1.2, 0.06);
+    tone(ctx, 0.06 * vol, 'triangle', 320, 960, 1.2, 0.06);
+    swept(ctx, 0.05 * vol, 'bandpass', 1200, 4600, 1.3, 1.2, 0.08);
+  },
+
+  // 激光炮：过量蓄力发射的合成兜底（比普通发射更低沉更厚）
+  laserOverFire(ctx, vol) {
+    tone(ctx, 0.5 * vol, 'sawtooth', 520, 70, 0.5, 0.005);
+    tone(ctx, 0.32 * vol, 'sine', 96, 34, 0.48, 0.004);
+    swept(ctx, 0.36 * vol, 'highpass', 900, 3800, 1.1, 0.34, 0.006);
+    click(ctx, 0.24 * vol, 2600, 0.06, 1.8);
+  },
+};
+
+// 有 Web Audio 合成实现的槽位清单：直接从 VOICES 派生，避免手工维护第二份
+export const SYNTH_SFX = Object.keys(VOICES);
 
 export function createSound(getConfig, assets) {
   const config = typeof getConfig === 'function' ? getConfig : () => ({});
@@ -181,11 +322,26 @@ export function createSound(getConfig, assets) {
     return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.6;
   }
 
-  function level(name) {
+  /**
+   * 音量解析。双实现槽位（采样与合成都有）按当前来源读各自的键：
+   *   sfx<Name>Sample / sfx<Name>Synth
+   * 单实现槽位没有这两个后缀键，回落到 sfx<Name>。
+   */
+  function level(name, source) {
+    const cfg = config() || {};
     const key = 'sfx' + name.charAt(0).toUpperCase() + name.slice(1);
-    const raw = Number((config() || {})[key]);
-    const mul = Number.isFinite(raw) ? Math.max(0, Math.min(2, raw)) : 1;
+    const legacy = Number(cfg[key]);
+    const fallback = Number.isFinite(legacy) ? Math.max(0, Math.min(2, legacy)) : 1;
+    const scoped = Number(cfg[key + (source === 'synth' ? 'Synth' : 'Sample')]);
+    const mul = Number.isFinite(scoped) ? Math.max(0, Math.min(2, scoped)) : fallback;
     return master() * mul;
+  }
+
+  // 来源判断与配置器共用 pickSfxSource：档位 → 逐项 → 缺失回落，
+  // 保证「只有采样的槽位」在「全部合成」档下仍能出声
+  function resolveSource(name, cfg) {
+    const c = cfg || config() || {};
+    return pickSfxSource(c, name, !!assetUrls[name], SYNTH_SFX.indexOf(name) !== -1);
   }
 
   function ready() {
@@ -258,142 +414,6 @@ export function createSound(getConfig, assets) {
     src.stop(ctx.currentTime + dur + 0.01);
   }
 
-  const VOICES = {
-    // 刀：气流扫频，偏“呼”的质感
-    bladeSwing(ctx, vol) {
-      swept(ctx, 0.26 * vol, 'bandpass', 480, 2800, 1.0, 0.2, 0.025);
-      tone(ctx, 0.05 * vol, 'sine', 700, 1500, 0.12, 0.02);
-    },
-
-    // 刀：切入金属，高频“锵”
-    bladeCut(ctx, vol) {
-      tone(ctx, 0.12 * vol, 'triangle', 1800, 3200, 0.1, 0.004);
-      click(ctx, 0.16 * vol, 4200, 0.06, 3.2);
-    },
-
-    // 刀：碎裂，多个短噪声错落
-    bladeBreak(ctx, vol) {
-      click(ctx, 0.22 * vol, 2600, 0.07, 1.6);
-      setTimeout(() => click(ctx, 0.17 * vol, 1800, 0.09, 1.4), 55);
-      setTimeout(() => click(ctx, 0.12 * vol, 1200, 0.12, 1.2), 120);
-      tone(ctx, 0.1 * vol, 'triangle', 900, 500, 0.16, 0.01);
-    },
-
-    // 炮：低频轰击
-    cannonFire(ctx, vol) {
-      tone(ctx, 0.62 * vol, 'sine', 95, 28, 0.5, 0.005);
-      swept(ctx, 0.3 * vol, 'lowpass', 900, 320, 0.7, 0.42, 0.01);
-    },
-
-    // 炮：裂缝逐块蔓延，短促的断裂
-    cannonCrack(ctx, vol) {
-      click(ctx, 0.2 * vol, 1600, 0.05, 1.4);
-      tone(ctx, 0.07 * vol, 'square', 320, 180, 0.06, 0.004);
-    },
-
-    // 炮：终局爆散，低频 + 碎屑
-    cannonBreak(ctx, vol) {
-      tone(ctx, 0.5 * vol, 'sine', 120, 34, 0.38, 0.004);
-      swept(ctx, 0.34 * vol, 'highpass', 900, 2600, 0.8, 0.3, 0.006);
-    },
-
-    // 左轮：闷响 + 锐利爆裂
-    revolverFire(ctx, vol) {
-      tone(ctx, 0.5 * vol, 'sine', 150, 42, 0.34, 0.004);
-      swept(ctx, 0.4 * vol, 'highpass', 1200, 1900, 0.9, 0.1, 0.004);
-    },
-
-    // 左轮：弹孔命中，闷闷的“噗”
-    revolverHit(ctx, vol) {
-      tone(ctx, 0.18 * vol, 'sine', 260, 120, 0.16, 0.008);
-      swept(ctx, 0.14 * vol, 'lowpass', 900, 400, 0.8, 0.14, 0.01);
-    },
-
-    // 机枪：高频短促“哒”
-    machinegunFire(ctx, vol) {
-      tone(ctx, 0.2 * vol, 'square', 1500, 620, 0.06, 0.003);
-      swept(ctx, 0.18 * vol, 'bandpass', 2600, 1800, 1.6, 0.05, 0.003);
-    },
-
-    // 机枪：弹着，极短的碎屑声
-    machinegunHit(ctx, vol) {
-      click(ctx, 0.14 * vol, 3200, 0.035, 2.2);
-    },
-
-    // 换弹：两声金属咔哒 + 弹仓旋转
-    reload(ctx, vol) {
-      click(ctx, 0.7 * vol, 2400, 0.09, 2.6);
-      setTimeout(() => click(ctx, 0.58 * vol, 1500, 0.11, 2.2), 130);
-      setTimeout(() => tone(ctx, 0.32 * vol, 'square', 240, 80, 0.34, 0.01), 20);
-    },
-
-    // 弹壳落地：优先用采样，合成兜底用非谐波分音模拟金属撞击
-    shellDrop(ctx, vol) {
-      const base = 900 + Math.random() * 320;
-      const ratios = [1, 2.76, 5.4, 8.93];
-      ratios.forEach((ratio, i) => {
-        const partial = (0.22 / (i + 1)) * vol;
-        tone(ctx, partial, 'sine', base * ratio, base * ratio * 0.9, 0.22 - i * 0.04, 0.002);
-      });
-      click(ctx, 0.28 * vol, 4200, 0.02, 4);
-    },
-
-    // 黑洞：生成，低频下坠 + 空气被抽走
-    blackholeOpen(ctx, vol) {
-      tone(ctx, 0.5 * vol, 'sine', 150, 34, 0.8, 0.02);
-      swept(ctx, 0.22 * vol, 'lowpass', 1400, 180, 0.9, 0.7, 0.05);
-    },
-
-    // 黑洞：持续嗡鸣。实际播放走 startHum，这里只做 1.2 秒版本给配置器试听
-    blackholeHum(ctx, vol) {
-      tone(ctx, 0.12 * vol, 'sine', 58, 52, 1.2, 0.12);
-      tone(ctx, 0.06 * vol, 'triangle', 87, 79, 1.2, 0.12);
-      swept(ctx, 0.05 * vol, 'lowpass', 520, 260, 0.8, 1.2, 0.15);
-    },
-
-    // 黑洞：吞噬，短促下坠
-    blackholeEat(ctx, vol) {
-      tone(ctx, 0.16 * vol, 'sine', 620, 90, 0.16, 0.004);
-      click(ctx, 0.1 * vol, 1200, 0.05, 1.8);
-    },
-
-    // 激光炮：满蓄力后的一次性发射，低频轰击 + 高频撕裂
-    laserFire(ctx, vol) {
-      tone(ctx, 0.42 * vol, 'sawtooth', 620, 90, 0.42, 0.005);
-      tone(ctx, 0.26 * vol, 'sine', 120, 42, 0.4, 0.004);
-      swept(ctx, 0.3 * vol, 'highpass', 1200, 4200, 1.0, 0.28, 0.006);
-      click(ctx, 0.2 * vol, 3200, 0.05, 2.0);
-    },
-
-    // 激光炮：烧蚀命中，嘶嘶声 + 闷响
-    laserHit(ctx, vol) {
-      swept(ctx, 0.2 * vol, 'bandpass', 2600, 900, 0.8, 0.16, 0.01);
-      click(ctx, 0.12 * vol, 1800, 0.04, 1.6);
-      tone(ctx, 0.08 * vol, 'triangle', 420, 180, 0.12, 0.006);
-    },
-
-    // 激光炮：蓄力持续嗡鸣。实际播放走 startHum('laserBeam')，这里只做 1.2 秒试听版
-    laserBeam(ctx, vol) {
-      tone(ctx, 0.08 * vol, 'sine', 180, 420, 1.2, 0.08);
-      tone(ctx, 0.05 * vol, 'triangle', 360, 840, 1.2, 0.08);
-      swept(ctx, 0.04 * vol, 'bandpass', 1600, 4200, 1.4, 1.2, 0.1);
-    },
-
-    // 激光炮：蓄力采样缺失时的合成兜底（1.2 秒上扬，与 laserChargeMs 对齐）
-    laserCharge(ctx, vol) {
-      tone(ctx, 0.1 * vol, 'sine', 160, 480, 1.2, 0.06);
-      tone(ctx, 0.06 * vol, 'triangle', 320, 960, 1.2, 0.06);
-      swept(ctx, 0.05 * vol, 'bandpass', 1200, 4600, 1.3, 1.2, 0.08);
-    },
-
-    // 激光炮：过量蓄力发射的合成兜底（比普通发射更低沉更厚）
-    laserOverFire(ctx, vol) {
-      tone(ctx, 0.5 * vol, 'sawtooth', 520, 70, 0.5, 0.005);
-      tone(ctx, 0.32 * vol, 'sine', 96, 34, 0.48, 0.004);
-      swept(ctx, 0.36 * vol, 'highpass', 900, 3800, 1.1, 0.34, 0.006);
-      click(ctx, 0.24 * vol, 2600, 0.06, 1.8);
-    },
-  };
 
   // 持续嗡鸣：存活期间一直响，收起时淡出。不走 play()，因为需要循环音。
   // 黑洞低沉下坠、激光明亮稳定；按名称共用一套节点，避免两把武器同时占着振荡器。
@@ -420,7 +440,8 @@ export function createSound(getConfig, assets) {
     if (hum) return;
     const key = HUM_PRESETS[name] ? name : 'blackholeHum';
     const preset = HUM_PRESETS[key];
-    const vol = level(key);
+    // 持续音只能由振荡器产生，固定按合成那一套取音量
+    const vol = level(key, 'synth');
     if (vol <= 0.002) return;
     const ctx = ready();
     if (!ctx) return;
@@ -479,19 +500,17 @@ export function createSound(getConfig, assets) {
 
   function play(name) {
     if (!enabled()) return false;
-    const gain = level(name);
+    const cfg = config() || {};
+
+    // 来源由预设 + 单项偏好决定，不再有写死白名单
+    const source = resolveSource(name, cfg);
+    const gain = level(name, source);
     if (gain <= 0.002) return false;
 
     preloadSamples();
 
-    // 激光炮的起束/命中音可强制走原生合成（laserSoundStyle='synth'），即使采样存在也跳过；
-    // 'sample' 时仍按「采样优先、缺失回落合成」处理。持续嗡鸣不走 play()。
-    const cfg = config() || {};
-    const forcedSynth =
-      cfg.laserSoundStyle === 'synth' && (name === 'laserFire' || name === 'laserHit');
-
-    // 有采样资源的名字优先播采样
-    if (!forcedSynth && assetUrls[name] && playSample(name, gain)) return true;
+    // 选采样且资源就绪时优先采样；缺失或解码失败自动回落合成
+    if (source === 'sample' && assetUrls[name] && playSample(name, gain)) return true;
 
     const ctx = ready();
     if (!ctx) return false;

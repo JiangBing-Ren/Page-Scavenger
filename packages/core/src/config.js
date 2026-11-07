@@ -88,8 +88,6 @@ export const DEFAULT_CONFIG = {
   laserMaxTargets: 8, // 满蓄力单次最多贯穿的目标数
   // 视觉形态：'column' Warp in 式中空光柱（为后续形态预留分发点）
   laserStyle: 'column',
-  // 音效来源：'sample' 优先真实采样（缺失自动回落合成）/ 'synth' 强制 Web Audio 合成
-  laserSoundStyle: 'sample',
   // 黑洞：点击放置奇点；长按模式下按住拖动，跟随光标吞吸
   // 视觉形态：'3d' 倾斜差速吸积盘（默认）/ '2d' 平面 void-orb（备选）
   blackholeStyle: '3d',
@@ -134,6 +132,83 @@ export const DEFAULT_CONFIG = {
   sfxLaserFire: 1,
   sfxLaserOverFire: 1,
   sfxLaserHit: 1,
+  // 每把武器独立的音效来源：sample 采样优先 / synth 全部合成 / custom 逐项自定义
+  bladeSoundSource: 'sample',
+  cannonSoundSource: 'sample',
+  revolverSoundSource: 'sample',
+  machinegunSoundSource: 'sample',
+  laserSoundSource: 'sample',
+  blackholeSoundSource: 'sample',
+  // 多套玩家自己的音效方案（只存数值，不含音频数据），初始只有一套「默认」
+  sfxProfiles: [{ name: '默认', values: {} }],
+  sfxProfileActive: '默认',
+};
+
+// 采样与合成都有的槽位：各自一套音量 + 一个来源偏好（仅 custom 预设下生效）。
+// 单实现槽位沿用 sfx<Name>，不在这里重复登记。
+export const DUAL_SFX = [
+  'shellDrop',
+  'revolverFire',
+  'reload',
+  'bladeSwing',
+  'laserFire',
+  'laserCharge',
+  'laserOverFire',
+];
+
+for (const name of DUAL_SFX) {
+  const key = 'sfx' + name.charAt(0).toUpperCase() + name.slice(1);
+  DEFAULT_CONFIG[key + 'Source'] = 'sample';
+  DEFAULT_CONFIG[key + 'Sample'] = 1;
+  DEFAULT_CONFIG[key + 'Synth'] = 1;
+}
+
+// 每把武器可选的音效来源，三档，与画质预设同一套用法
+export const SFX_PRESETS = ['sample', 'synth', 'custom'];
+
+export const SFX_PRESET_LABELS = {
+  sample: '采样优先',
+  synth: '全部合成',
+  custom: '自定义（逐项）',
+};
+
+// 方案套数上限。一套方案只存数值（约 40 个键、1KB 上下），
+// 4 套加上其他配置仍低于浏览器同步存储的 8KB 单项上限。
+export const SFX_PROFILE_MAX = 4;
+
+// 音效 → 所属武器，决定「该武器用哪套来源」时查哪个键
+export const SFX_WEAPON = {
+  bladeSwing: 'blade',
+  bladeSwing2: 'blade',
+  bladeSwing3: 'blade',
+  bladeSwing4: 'blade',
+  bladeCut: 'blade',
+  bladeBreak: 'blade',
+  bladeFinish: 'blade',
+  cannonFire: 'cannon',
+  cannonCrack: 'cannon',
+  cannonBreak: 'cannon',
+  revolverFire: 'revolver',
+  revolverHit: 'revolver',
+  reload: 'revolver',
+  shellDrop: 'revolver',
+  machinegunFire: 'machinegun',
+  machinegunHit: 'machinegun',
+  laserCharge: 'laser',
+  laserFire: 'laser',
+  laserOverFire: 'laser',
+  laserHit: 'laser',
+  laserBeam: 'laser',
+  blackholeOpen: 'blackhole',
+  blackholeHum: 'blackhole',
+  blackholeEat: 'blackhole',
+};
+
+export const SFX_SOURCES = ['sample', 'synth'];
+
+export const SFX_SOURCE_LABELS = {
+  sample: '采样',
+  synth: '合成',
 };
 
 export const BASE_SELECTORS = [
@@ -158,13 +233,6 @@ export const LASER_STYLES = ['column'];
 
 export const LASER_STYLE_LABELS = {
   column: '中空光柱（默认）',
-};
-
-export const LASER_SOUND_STYLES = ['synth', 'sample'];
-
-export const LASER_SOUND_STYLE_LABELS = {
-  synth: '原生合成（默认）',
-  sample: '真实采样优先',
 };
 
 // 刀的斩击形态：classic 为原有蓝白刀光，slash 为移植自 pixelfx 的 Slash wipe

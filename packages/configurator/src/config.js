@@ -12,11 +12,24 @@ import {
   BLADE_STYLE_LABELS,
   LASER_STYLES,
   LASER_STYLE_LABELS,
-  LASER_SOUND_STYLES,
-  LASER_SOUND_STYLE_LABELS,
+  SFX_PRESETS,
+  SFX_PRESET_LABELS,
+  SFX_SOURCES,
+  SFX_SOURCE_LABELS,
+  SFX_PROFILE_MAX,
+  SFX_WEAPON,
+  DUAL_SFX,
 } from '../../core/src/config.js';
+import {
+  capOf,
+  captureSfxValues,
+  captureWeaponValues,
+  restoreWeaponSfx,
+  applyProfileTo,
+  pickSfxSource,
+} from '../../core/src/sfxprofile.js';
 import { createCleaner } from '../../core/src/engine.js';
-import { sampleUrls, sampleBytes } from '../../core/src/sound.js';
+import { sampleUrls, sampleBytes, SAMPLE_ASSETS, SYNTH_SFX } from '../../core/src/sound.js';
 import { WEAPONS, WEAPON_GROUPS } from '../../core/src/weapons.js';
 
 const ext = typeof browser !== 'undefined' ? browser : typeof chrome !== 'undefined' ? chrome : null;
@@ -33,7 +46,7 @@ const BASIC_FIELDS = [
   { key: 'allowOversize', label: '允许超大容器', type: 'toggle', hint: '碎片按可见区域裁剪' },
   { key: 'forceMode', label: '自由模式', type: 'toggle', hint: '不限于广告选择器，任意元素都能切' },
   { key: 'soundEnabled', label: '音效', type: 'toggle' },
-  { key: 'soundVolume', label: '音量', type: 'range', min: 0, max: 1, step: 0.05 },
+  { key: 'soundVolume', label: '总音量', type: 'range', min: 0, max: 1, step: 0.05 },
   { key: 'autoApplyMarks', label: '刷新后自动清理', type: 'toggle', hint: '记住切过的元素并自动隐藏' },
 ];
 
@@ -88,13 +101,13 @@ const ADV_FIELDS = [
   { key: 'trailLength', label: '刀光采样点数', type: 'range', min: 8, max: 60, step: 1, group: 'blade', sub: 'trail' },
   { key: 'trailLifeMs', label: '刀光存活', type: 'range', min: 60, max: 400, step: 10, suffix: 'ms', group: 'blade', sub: 'trail' },
   // 刀 · 音效
-  { key: 'sfxBladeSwing', label: '第1刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeSwing2', label: '第2刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeSwing3', label: '第3刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeSwing4', label: '第4刀', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeCut', label: '切入', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeBreak', label: '碎裂', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
-  { key: 'sfxBladeFinish', label: '多刀最后一击', type: 'range', min: 0, max: 2, step: 0.05, group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeSwing', label: '第1刀', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeSwing2', label: '第2刀', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeSwing3', label: '第3刀', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeSwing4', label: '第4刀', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeCut', label: '切入', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeBreak', label: '碎裂', group: 'blade', sub: 'sfx' },
+  { sfx: 'bladeFinish', label: '多刀最后一击', group: 'blade', sub: 'sfx' },
 
   // 炮 · 爆破
   { key: 'cannonRadius', label: '爆破半径', type: 'range', min: 60, max: 320, step: 10, suffix: 'px', group: 'cannon', sub: 'blast' },
@@ -109,9 +122,9 @@ const ADV_FIELDS = [
   { key: 'crackStartWidth', label: '起点宽度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'cannon', sub: 'crack' },
   { key: 'crackEndWidth', label: '末端宽度', type: 'range', min: 0.05, max: 1, step: 0.05, group: 'cannon', sub: 'crack' },
   // 炮 · 音效
-  { key: 'sfxCannonFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
-  { key: 'sfxCannonCrack', label: '裂缝', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
-  { key: 'sfxCannonBreak', label: '爆散', type: 'range', min: 0, max: 2, step: 0.05, group: 'cannon', sub: 'sfx' },
+  { sfx: 'cannonFire', label: '开火', group: 'cannon', sub: 'sfx' },
+  { sfx: 'cannonCrack', label: '裂缝', group: 'cannon', sub: 'sfx' },
+  { sfx: 'cannonBreak', label: '爆散', group: 'cannon', sub: 'sfx' },
 
   // 左轮 · 射击与弹仓
   { key: 'revolverHoleRadius', label: '弹孔大小', type: 'range', min: 10, max: 90, step: 2, suffix: 'px', group: 'revolver', sub: 'shot' },
@@ -120,10 +133,10 @@ const ADV_FIELDS = [
   { key: 'revolverReloadMs', label: '换弹时间', type: 'range', min: 200, max: 2500, step: 50, suffix: 'ms', group: 'revolver', sub: 'shot' },
   { key: 'shellCasingsEnabled', label: '抛壳', type: 'toggle', group: 'revolver', sub: 'shot' },
   // 左轮 · 音效
-  { key: 'sfxRevolverFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
-  { key: 'sfxRevolverHit', label: '弹孔', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
-  { key: 'sfxReload', label: '换弹', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
-  { key: 'sfxShellDrop', label: '弹壳落地', type: 'range', min: 0, max: 2, step: 0.05, group: 'revolver', sub: 'sfx' },
+  { sfx: 'revolverFire', label: '开火', group: 'revolver', sub: 'sfx' },
+  { sfx: 'revolverHit', label: '弹孔', group: 'revolver', sub: 'sfx' },
+  { sfx: 'reload', label: '换弹', group: 'revolver', sub: 'sfx' },
+  { sfx: 'shellDrop', label: '弹壳落地', group: 'revolver', sub: 'sfx' },
 
   // 机枪 · 射击
   { key: 'machinegunHoleRadius', label: '弹孔大小', type: 'range', min: 6, max: 60, step: 2, suffix: 'px', group: 'machinegun', sub: 'shot' },
@@ -131,8 +144,8 @@ const ADV_FIELDS = [
   { key: 'machinegunSpread', label: '散布', type: 'range', min: 0, max: 40, step: 2, suffix: 'px', group: 'machinegun', sub: 'shot' },
   { key: 'muzzleFlashEnabled', label: '枪口火光', type: 'toggle', group: 'machinegun', sub: 'shot' },
   // 机枪 · 音效
-  { key: 'sfxMachinegunFire', label: '开火', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
-  { key: 'sfxMachinegunHit', label: '弹着', type: 'range', min: 0, max: 2, step: 0.05, group: 'machinegun', sub: 'sfx' },
+  { sfx: 'machinegunFire', label: '开火', group: 'machinegun', sub: 'sfx' },
+  { sfx: 'machinegunHit', label: '弹着', group: 'machinegun', sub: 'sfx' },
 
   // 激光炮 · 光束
   { key: 'laserStyle', label: '视觉形态', type: 'select', options: LASER_STYLES, labels: LASER_STYLE_LABELS, group: 'laser', sub: 'beam' },
@@ -147,12 +160,11 @@ const ADV_FIELDS = [
   { key: 'laserBurnThreshold', label: '烧毁阈值', type: 'range', min: 0.1, max: 1, step: 0.05, group: 'laser', sub: 'hit', hint: '烧蚀面积占比达到该值时元素整体消失并结算' },
   { key: 'laserBurnIntensity', label: '灼烧程度', type: 'range', min: 0.3, max: 2, step: 0.1, group: 'laser', sub: 'hit', hint: '影响焦边宽度、边缘破碎度与余温时长；越大，贯穿口外围的焦痕越明显' },
   // 激光炮 · 音效
-  { key: 'laserSoundStyle', label: '音效来源', type: 'select', options: LASER_SOUND_STYLES, labels: LASER_SOUND_STYLE_LABELS, group: 'laser', sub: 'sfx', hint: '持续嗡鸣始终由 Web Audio 合成；此项切换起束音与命中音' },
-  { key: 'sfxLaserCharge', label: '蓄力', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
-  { key: 'sfxLaserFire', label: '发射', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
-  { key: 'sfxLaserOverFire', label: '过量发射', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
-  { key: 'sfxLaserHit', label: '烧蚀', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
-  { key: 'sfxLaserBeam', label: '蓄力嗡鸣（兜底）', type: 'range', min: 0, max: 2, step: 0.05, group: 'laser', sub: 'sfx' },
+  { sfx: 'laserCharge', label: '蓄力', group: 'laser', sub: 'sfx' },
+  { sfx: 'laserFire', label: '发射', group: 'laser', sub: 'sfx' },
+  { sfx: 'laserOverFire', label: '过量发射', group: 'laser', sub: 'sfx' },
+  { sfx: 'laserHit', label: '烧蚀', group: 'laser', sub: 'sfx' },
+  { sfx: 'laserBeam', label: '蓄力嗡鸣（兜底）', group: 'laser', sub: 'sfx' },
 
   // 黑洞 · 引力
   { key: 'blackholeStyle', label: '视觉形态', type: 'select', options: BLACKHOLE_STYLES, labels: BLACKHOLE_STYLE_LABELS, group: 'blackhole', sub: 'gravity' },
@@ -166,13 +178,21 @@ const ADV_FIELDS = [
   { key: 'blackholeGrowEfficiency', label: '成长效率', type: 'range', min: 0, max: 0.2, step: 0.005, group: 'blackhole', sub: 'devour' },
   { key: 'blackholeMaxAreaRatio', label: '面积上限', type: 'range', min: 0.1, max: 1, step: 0.01, group: 'blackhole', sub: 'devour' },
   // 黑洞 · 音效
-  { key: 'sfxBlackholeOpen', label: '生成', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
-  { key: 'sfxBlackholeHum', label: '吸附', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
-  { key: 'sfxBlackholeEat', label: '吞噬', type: 'range', min: 0, max: 2, step: 0.05, group: 'blackhole', sub: 'sfx' },
+  { sfx: 'blackholeOpen', label: '生成', group: 'blackhole', sub: 'sfx' },
+  { sfx: 'blackholeHum', label: '吸附', group: 'blackhole', sub: 'sfx' },
+  { sfx: 'blackholeEat', label: '吞噬', group: 'blackhole', sub: 'sfx' },
 ];
 
-let draft = { ...DEFAULT_CONFIG };
-let saved = { ...DEFAULT_CONFIG };
+// sfxProfiles 是嵌套结构，浅拷贝会让新建方案污染 DEFAULT_CONFIG，必须单独深拷贝
+function cloneConfig(src) {
+  return {
+    ...src,
+    sfxProfiles: JSON.parse(JSON.stringify((src && src.sfxProfiles) || [])),
+  };
+}
+
+let draft = cloneConfig(DEFAULT_CONFIG);
+let saved = cloneConfig(DEFAULT_CONFIG);
 let advFilter = 'all';
 let cleaner = null;
 let previewing = false;
@@ -201,20 +221,28 @@ async function loadConfig() {
 }
 
 async function saveConfig(config) {
-  if (isDesktop) return window.desktop.config.set(config);
-  if (isExt) {
-    await ext.storage.sync.set({ 'adslash.settings': config });
-    const tabs = await ext.tabs.query({});
-    for (const tab of tabs) {
-      if (!tab.id) continue;
-      try {
-        await ext.tabs.sendMessage(tab.id, { type: 'adslash:setConfig', patch: config });
-      } catch (e) {}
+  try {
+    if (isDesktop) return await window.desktop.config.set(config);
+    if (isExt) {
+      await ext.storage.sync.set({ 'adslash.settings': config });
+      const tabs = await ext.tabs.query({});
+      for (const tab of tabs) {
+        if (!tab.id) continue;
+        try {
+          await ext.tabs.sendMessage(tab.id, { type: 'adslash:setConfig', patch: config });
+        } catch (e) {}
+      }
+      return true;
     }
+    localStorage.setItem('cleanser.config', JSON.stringify(config));
     return true;
+  } catch (e) {
+    // chrome.storage.sync 单键上限 8KB。方案只存数值（4 套约 4KB），
+    // 音频文件放在 assets 目录、不进配置，所以正常不会触发；真触发就明说原因。
+    const msg = e && e.message ? e.message : '未知错误';
+    toast('保存失败：' + msg, true);
+    return false;
   }
-  localStorage.setItem('cleanser.config', JSON.stringify(config));
-  return true;
 }
 
 function toast(text, warn) {
@@ -227,6 +255,295 @@ function toast(text, warn) {
 function markDirty() {
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   $('save').classList.toggle('dirty', dirty);
+}
+
+// ---- 音效方案：多套玩家自己的配置，只存数值（来源 + 两套音量），不含音频数据 ----
+
+function activeProfile() {
+  return (draft.sfxProfiles || []).find((p) => p.name === draft.sfxProfileActive) || null;
+}
+
+// 应用整套方案：先把音效键复位到默认，再叠加方案里保存的值
+function applyProfile(name) {
+  const prof = (draft.sfxProfiles || []).find((p) => p.name === name);
+  if (!prof) return;
+  applyProfileTo(draft, prof);
+  renderAll();
+  markDirty();
+}
+
+function overwriteProfile() {
+  const prof = activeProfile();
+  if (!prof) return;
+  prof.values = captureSfxValues(draft);
+  toast('已覆盖方案「' + prof.name + '」');
+  markDirty();
+}
+
+// 方案命名：动态 dialog，避免依赖 HTML 里预置节点
+function askProfileName(defaultName, onOk) {
+  const dlg = document.createElement('dialog');
+  const form = document.createElement('form');
+  form.method = 'dialog';
+
+  const title = document.createElement('h3');
+  title.textContent = '新建音效方案';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = defaultName;
+  input.maxLength = 16;
+
+  const actions = document.createElement('div');
+  actions.className = 'dialog-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = '取消';
+  const ok = document.createElement('button');
+  ok.type = 'submit';
+  ok.className = 'primary';
+  ok.textContent = '创建';
+  actions.append(cancel, ok);
+
+  form.append(title, input, actions);
+  dlg.appendChild(form);
+  document.body.appendChild(dlg);
+
+  const close = () => {
+    if (dlg.parentNode) dlg.parentNode.removeChild(dlg);
+  };
+  cancel.addEventListener('click', close);
+  dlg.addEventListener('close', close);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = (input.value || '').trim();
+    if (!name) return;
+    if (onOk(name) === false) return;
+    close();
+  });
+
+  if (typeof dlg.showModal === 'function') dlg.showModal();
+  else dlg.setAttribute('open', '');
+  input.select();
+}
+
+function newProfile() {
+  const profiles = draft.sfxProfiles || (draft.sfxProfiles = []);
+  if (profiles.length >= SFX_PROFILE_MAX) {
+    toast('方案最多 ' + SFX_PROFILE_MAX + ' 套，请先覆盖现有方案', true);
+    return;
+  }
+  askProfileName('方案 ' + (profiles.length + 1), (name) => {
+    if (profiles.some((p) => p.name === name)) {
+      toast('名字重复了', true);
+      return false;
+    }
+    profiles.push({ name, values: captureSfxValues(draft) });
+    draft.sfxProfileActive = name;
+    renderAll();
+    markDirty();
+    toast('已新建方案「' + name + '」');
+    return true;
+  });
+}
+
+// 常用区的「音效预设」行：方案下拉 + 新建 + 覆盖（这里只管方案，不放试听/重置）
+function sfxProfileRow() {
+  const row = document.createElement('div');
+  row.className = 'field';
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = '音效预设';
+  const hint = document.createElement('small');
+  hint.textContent = '保存多套音效方案，切换即应用；最多 ' + SFX_PROFILE_MAX + ' 套';
+  label.appendChild(hint);
+
+  const control = document.createElement('div');
+  control.className = 'control';
+
+  const select = document.createElement('select');
+  for (const p of draft.sfxProfiles || []) {
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name;
+    select.appendChild(opt);
+  }
+  select.value = draft.sfxProfileActive;
+  select.addEventListener('change', () => applyProfile(select.value));
+  control.appendChild(select);
+
+  const newBtn = document.createElement('button');
+  newBtn.type = 'button';
+  newBtn.className = 'reset-field';
+  newBtn.textContent = '新建';
+  newBtn.title = '把当前音效配置另存为新方案';
+  newBtn.addEventListener('click', newProfile);
+  control.appendChild(newBtn);
+
+  const overBtn = document.createElement('button');
+  overBtn.type = 'button';
+  overBtn.className = 'reset-field';
+  overBtn.textContent = '覆盖';
+  overBtn.title = '用当前音效配置覆盖选中方案';
+  overBtn.addEventListener('click', () => {
+    const prof = activeProfile();
+    if (!prof) return;
+    if (typeof confirm === 'function' && !confirm('用当前设置覆盖方案「' + prof.name + '」？')) return;
+    overwriteProfile();
+  });
+  control.appendChild(overBtn);
+
+  row.append(label, control);
+  return row;
+}
+
+// 武器「音效」标题旁：该武器用哪套来源 + 保存进当前方案（不放新建，避免与方案管理重复）
+function weaponSfxControls(weaponKey) {
+  const wrap = document.createElement('div');
+  wrap.className = 'subgroup-controls';
+
+  const sourceKey = weaponKey + 'SoundSource';
+
+  const select = document.createElement('select');
+  for (const mode of SFX_PRESETS) {
+    const opt = document.createElement('option');
+    opt.value = mode;
+    opt.textContent = SFX_PRESET_LABELS[mode];
+    select.appendChild(opt);
+  }
+  select.value = draft[sourceKey] || 'sample';
+  select.title = '这把武器用哪套音效';
+  select.addEventListener('change', () => {
+    draft[sourceKey] = select.value;
+    // 切档位 = 从当前方案重新展开，未保存的改动会被方案里的值覆盖
+    restoreWeaponSfx(draft, weaponKey, (activeProfile() || {}).values);
+    draft[sourceKey] = select.value;
+    renderAdvanced();
+    markDirty();
+  });
+  wrap.appendChild(select);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'reset-field';
+  saveBtn.textContent = '保存';
+  saveBtn.title = '把这把武器的音效设置保存进当前方案';
+  saveBtn.addEventListener('click', () => {
+    const prof = activeProfile();
+    if (!prof) return;
+    prof.values = Object.assign({}, prof.values, captureWeaponValues(draft, weaponKey));
+    prof.values[sourceKey] = draft[sourceKey];
+    toast('已保存到方案「' + prof.name + '」');
+    markDirty();
+  });
+  wrap.appendChild(saveBtn);
+
+  return wrap;
+}
+
+/**
+ * 音效行：来源下拉 + 当前那一套的音量 + 试听 + 还原。
+ * 两套音量各自独立保存（sfx<Name>Sample / sfx<Name>Synth），UI 只显示当前这套——
+ * 采样与合成的响度基准不同，共用同一个值必然有一边调不准。
+ */
+function sfxRow(field) {
+  const name = field.sfx;
+  const cap = capOf(name);
+  const dual = DUAL_SFX.indexOf(name) !== -1;
+  // 判断「这个音效有没有采样实现」要用 SAMPLE_ASSETS（静态清单，只登记真实存在的文件）。
+  // sampleUrls 是函数、要传 getUrl 才知道 URL，拿它当对象用会恒为 undefined，
+  // 结果所有音效都被当成「只有合成」，下拉恒显示合成、音量恒读合成那套。
+  const hasSample = !!SAMPLE_ASSETS[name];
+  const hasSynth = SYNTH_SFX.indexOf(name) !== -1;
+  const weapon = SFX_WEAPON[name] || '';
+  // 与运行时共用同一份判断：想走的那套不存在时会回落，不会显示成「合成」却实际静音
+  const source = pickSfxSource(draft, name, hasSample, hasSynth);
+  const volKey = dual ? 'sfx' + cap + (source === 'synth' ? 'Synth' : 'Sample') : 'sfx' + cap;
+
+  const row = document.createElement('div');
+  row.className = 'field';
+  row.dataset.key = volKey;
+  row.dataset.kind = 'range';
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = field.label;
+  const note = document.createElement('small');
+  if (!hasSample) note.textContent = dual ? '采样缺失，已回落合成' : '仅合成';
+  else if (!hasSynth) note.textContent = '仅采样';
+  if (note.textContent) label.appendChild(note);
+
+  const control = document.createElement('div');
+  control.className = 'control';
+
+  const select = document.createElement('select');
+  for (const s of SFX_SOURCES) {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = SFX_SOURCE_LABELS[s];
+    select.appendChild(opt);
+  }
+  select.value = source;
+  // 只有一套实现的槽位置灰；双实现始终可改——改了会把该武器自动切到「自定义」
+  select.disabled = !dual;
+  select.title = !dual
+    ? '此音效只有一套实现'
+    : '切换此音效的来源（会把该武器自动切到自定义）';
+  select.addEventListener('change', () => {
+    draft['sfx' + cap + 'Source'] = select.value;
+    if (weapon) draft[weapon + 'SoundSource'] = 'custom';
+    markDirty();
+    renderAdvanced();
+  });
+  control.appendChild(select);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = 0;
+  input.max = 2;
+  input.step = 0.05;
+  input.value = draft[volKey];
+
+  const value = document.createElement('span');
+  value.className = 'value';
+  const renderValue = () => {
+    const n = Number(draft[volKey]);
+    value.textContent = (Number.isFinite(n) ? n : 0).toFixed(2);
+  };
+  input.addEventListener('input', () => {
+    draft[volKey] = Number(input.value);
+    renderValue();
+    markDirty();
+  });
+  renderValue();
+  control.append(input, value);
+
+  const playBtn = document.createElement('button');
+  playBtn.type = 'button';
+  playBtn.className = 'reset-field';
+  playBtn.title = '试听（按当前预设/来源实际会响的那一套）';
+  playBtn.textContent = '▶';
+  playBtn.addEventListener('click', () => {
+    ensureCleaner().setConfig({ ...draft });
+    ensureCleaner().playSfx(name);
+  });
+  control.appendChild(playBtn);
+
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.className = 'reset-field';
+  resetBtn.title = '还原此项为默认值';
+  resetBtn.textContent = '↺';
+  resetBtn.addEventListener('click', () => {
+    draft[volKey] = DEFAULT_CONFIG[volKey];
+    if (dual) draft['sfx' + cap + 'Source'] = DEFAULT_CONFIG['sfx' + cap + 'Source'];
+    renderAdvanced();
+  });
+  control.appendChild(resetBtn);
+
+  row.append(label, control);
+  return row;
 }
 
 function fieldRow(field) {
@@ -413,14 +730,25 @@ function renderAdvanced() {
       const fields = ADV_FIELDS.filter((field) => field.group === wKey && field.sub === subKey);
       if (!fields.length) continue;
 
-      const sub = document.createElement('h4');
-      sub.className = 'subgroup-title';
-      sub.textContent = subLabel;
-      container.appendChild(sub);
+      if (subKey === 'sfx') {
+        // 音效标题旁挂「该武器用哪套来源」+「保存进当前方案」，这里不放试听/重置
+        const head = document.createElement('div');
+        head.className = 'subgroup-head';
+        const h = document.createElement('h4');
+        h.className = 'subgroup-title';
+        h.textContent = subLabel;
+        head.append(h, weaponSfxControls(wKey));
+        container.appendChild(head);
+      } else {
+        const sub = document.createElement('h4');
+        sub.className = 'subgroup-title';
+        sub.textContent = subLabel;
+        container.appendChild(sub);
+      }
 
       const grid = document.createElement('div');
       grid.className = 'grid';
-      for (const field of fields) grid.appendChild(fieldRow(field));
+      for (const field of fields) grid.appendChild(field.sfx ? sfxRow(field) : fieldRow(field));
       container.appendChild(grid);
     }
 
@@ -431,7 +759,7 @@ function renderAdvanced() {
     if (rest.length) {
       const grid = document.createElement('div');
       grid.className = 'grid';
-      for (const field of rest) grid.appendChild(fieldRow(field));
+      for (const field of rest) grid.appendChild(field.sfx ? sfxRow(field) : fieldRow(field));
       container.appendChild(grid);
     }
   }
@@ -440,7 +768,11 @@ function renderAdvanced() {
 function renderAll() {
   const basic = $('basic');
   basic.innerHTML = '';
-  for (const field of BASIC_FIELDS) basic.appendChild(fieldRow(field));
+  for (const field of BASIC_FIELDS) {
+    basic.appendChild(fieldRow(field));
+    // 音效方案放在总音量之后：都是「常用」里的音频设置
+    if (field.key === 'soundVolume') basic.appendChild(sfxProfileRow());
+  }
 
   renderAdvanced();
   renderWeapons();
@@ -510,15 +842,15 @@ async function init() {
   $('host').textContent = '当前：' + hostName();
 
   const loaded = await loadConfig();
-  draft = { ...DEFAULT_CONFIG, ...loaded };
-  saved = { ...draft };
+  draft = cloneConfig({ ...DEFAULT_CONFIG, ...loaded });
+  saved = cloneConfig(draft);
 
   renderAll();
 
   $('save').addEventListener('click', async () => {
     try {
       await saveConfig({ ...draft });
-      saved = { ...draft };
+      saved = cloneConfig(draft);
       markDirty();
       toast('已保存');
     } catch (e) {
@@ -527,7 +859,7 @@ async function init() {
   });
 
   $('reset').addEventListener('click', () => {
-    draft = { ...DEFAULT_CONFIG };
+    draft = cloneConfig(DEFAULT_CONFIG);
     syncControls();
     toast('已还原为默认值，记得保存');
   });

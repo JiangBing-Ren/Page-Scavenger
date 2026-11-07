@@ -15,7 +15,11 @@ import {
   CANNON_BREAK_STYLES,
   BLADE_STYLES,
   LASER_STYLES,
-  LASER_SOUND_STYLES,
+  SFX_PRESETS,
+  SFX_SOURCES,
+  SFX_PROFILE_MAX,
+  SFX_WEAPON,
+  DUAL_SFX,
 } from '../packages/core/src/config.js';
 import {
   basePointsForArea,
@@ -33,8 +37,15 @@ import { drawLaserEmitter, drawLaserColumn, drawBurnEdges } from '../packages/co
 import { buildBurnBand, applyBurn, restoreBurn, activeBurnEdges, clearBurns, burnCount } from '../packages/core/src/burns.js';
 import { buildShatterPattern, SHATTER_IMPACT, SHATTER_BURST } from '../packages/core/src/shatter.js';
 import { buildSlashPattern, SLASH_EDGE_END, SLASH_SLIP, SLASH_SPLIT } from '../packages/core/src/slashwipe.js';
-import { SAMPLE_ASSETS } from '../packages/core/src/sound.js';
+import { SAMPLE_ASSETS, SYNTH_SFX } from '../packages/core/src/sound.js';
 import { chargeWidthMul, OVERCHARGE_WIDTH_CAP, bladeSfxForCut } from '../packages/core/src/engine.js';
+import {
+  applyProfileTo,
+  restoreWeaponSfx,
+  captureWeaponValues,
+  captureSfxValues,
+  pickSfxSource,
+} from '../packages/core/src/sfxprofile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -353,6 +364,17 @@ await check('packages/core 内不出现 chrome./browser. 调用', async () => {
     assert.ok(!/\bchrome\s*\./.test(text), `${f} 出现了 chrome.`);
     assert.ok(!/\bbrowser\s*\./.test(text), `${f} 出现了 browser.`);
   }
+});
+
+await check('配置器不把 sampleUrls 当成对象用', async () => {
+  const text = await fs.readFile(path.join(ROOT, 'packages/configurator/src/config.js'), 'utf8');
+  // sampleUrls 是需要传 getUrl 的函数，拿它当对象用会恒为 undefined，
+  // 结果所有音效都被当成「只有合成」，下拉恒显示合成、音量恒读合成那套
+  assert.ok(!/sampleUrls\[/.test(text), '判断有无采样要用 SAMPLE_ASSETS，而不是 sampleUrls');
+  assert.ok(/SAMPLE_ASSETS\[name\]/.test(text), '应改用 SAMPLE_ASSETS 判断采样实现');
+  // 浅拷贝会把新建方案写进 DEFAULT_CONFIG.sfxProfiles，污染默认值
+  assert.ok(!/draft = \{ \.\.\.DEFAULT_CONFIG/.test(text), '拷贝配置必须深拷贝 sfxProfiles');
+  assert.ok(/cloneConfig/.test(text), '应使用 cloneConfig 深拷贝方案数组');
 });
 
 await check('桌面版主进程与预加载脚本语法正确', async () => {
@@ -840,6 +862,48 @@ await check('多刀音效按刀序取档，最后一刀固定为最后一击', (
   }
 });
 
+await check('音效方案的切换、局部保存与未保存回退', () => {
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  const prof = {
+    name: '全合成',
+    values: {
+      laserSoundSource: 'synth',
+      sfxLaserFireSample: 0.3,
+      sfxLaserFireSynth: 1.4,
+      sfxLaserFireSource: 'synth',
+    },
+  };
+
+  // 应用整套方案：激光炮档位与两套音量都取方案里的值
+  applyProfileTo(cfg, prof);
+  assert.equal(cfg.sfxProfileActive, '全合成');
+  assert.equal(cfg.laserSoundSource, 'synth');
+  assert.equal(cfg.sfxLaserFireSynth, 1.4, '合成档下读的是合成那套音量');
+  assert.equal(cfg.sfxLaserFireSample, 0.3, '采样那套的值仍然保留，切回去不会丢');
+
+  // 切档位：先恢复方案值，再写入用户选的档位（配置器里就是这么两步）
+  restoreWeaponSfx(cfg, 'laser', prof.values);
+  cfg.laserSoundSource = 'custom';
+  assert.equal(cfg.laserSoundSource, 'custom');
+
+  // 未保存就改了小项，然后切走再切回：应回到方案里保存的值
+  cfg.sfxLaserFireSource = 'sample';
+  restoreWeaponSfx(cfg, 'laser', prof.values);
+  cfg.laserSoundSource = 'custom';
+  assert.equal(cfg.sfxLaserFireSource, 'synth', '未保存的改动必须被方案值覆盖');
+
+  // 局部保存：只收该武器的键，不碰别的武器
+  const partial = captureWeaponValues(cfg, 'laser');
+  assert.equal(partial.laserSoundSource, 'custom');
+  assert.ok('sfxLaserFireSynth' in partial);
+  assert.ok(!('sfxBladeSwingSample' in partial), '不应把别的武器的键收进来');
+
+  // 整套抽取：包含所有武器，但不含方案容器与总音量
+  const all = captureSfxValues(cfg);
+  assert.ok('bladeSoundSource' in all && 'laserSoundSource' in all);
+  assert.ok(!('sfxProfiles' in all) && !('soundVolume' in all));
+});
+
 console.log('\n[14] 激光炮：蓄力贯穿与局部烧蚀');
 
 await check('注册与蓄力配置默认值', () => {
@@ -850,14 +914,20 @@ await check('注册与蓄力配置默认值', () => {
   assert.equal(laser.scoring, 'area');
   assert.ok(laser.hitFilter, '命中滤镜不能为空');
   assert.equal(DEFAULT_CONFIG.laserStyle, 'column');
-  assert.equal(DEFAULT_CONFIG.laserSoundStyle, 'sample', '默认应优先真实采样');
+  // 音效来源按武器各自一档，默认采样优先
+  for (const weapon of ['blade', 'cannon', 'revolver', 'machinegun', 'laser', 'blackhole']) {
+    assert.equal(DEFAULT_CONFIG[weapon + 'SoundSource'], 'sample', `${weapon} 默认采样优先`);
+  }
+  // 方案容器：初始只有一套「默认」
+  assert.equal(DEFAULT_CONFIG.sfxProfiles.length, 1);
+  assert.equal(DEFAULT_CONFIG.sfxProfiles[0].name, '默认');
+  assert.equal(DEFAULT_CONFIG.sfxProfileActive, '默认');
   assert.ok(DEFAULT_CONFIG.laserWidth > 0);
   assert.ok(DEFAULT_CONFIG.laserChargeMs >= 200);
   assert.ok(DEFAULT_CONFIG.laserRange >= 200);
   assert.ok(DEFAULT_CONFIG.laserBurnThreshold > 0 && DEFAULT_CONFIG.laserBurnThreshold <= 1);
   assert.ok(DEFAULT_CONFIG.laserMaxTargets >= 1);
   assert.deepEqual(LASER_STYLES, ['column']);
-  assert.deepEqual(LASER_SOUND_STYLES, ['synth', 'sample']);
 
   // 过量蓄力：满蓄力 1 倍，继续按住线性涨到 3 倍
   assert.ok(DEFAULT_CONFIG.laserOverchargeMs >= 200, '过量蓄力时长必须有默认值');
@@ -990,14 +1060,38 @@ await check('音效槽位与切换枚举', () => {
     'laserCharge',
     'laserFire',
     'laserOverFire',
-    'laserHit',
     'bladeSwing',
     'bladeFinish',
   ]) {
     assert.ok(SAMPLE_ASSETS[key], `${key} 需登记采样槽位`);
   }
+  // 这两个只有合成实现：登记进采样清单会拿到 404 的 URL，
+  // 让 UI 以为有采样而实际回落，所以必须保持不登记
   assert.ok(!SAMPLE_ASSETS.laserBeam, '蓄力嗡鸣需循环播放，不应走一次性采样');
-  assert.deepEqual(LASER_SOUND_STYLES, ['synth', 'sample']);
+  assert.ok(!SAMPLE_ASSETS.laserHit, '烧蚀命中没有采样文件，不应登记');
+
+  // 每把武器可三档切换来源；方案最多 4 套
+  assert.deepEqual(SFX_PRESETS, ['sample', 'synth', 'custom']);
+  assert.deepEqual(SFX_SOURCES, ['sample', 'synth']);
+  assert.equal(SFX_PROFILE_MAX, 4);
+  // 每个音效都必须归属到某把武器，否则武器档位管不到它
+  for (const name of new Set([...SYNTH_SFX, ...Object.keys(SAMPLE_ASSETS)])) {
+    assert.ok(SFX_WEAPON[name], `${name} 需归属到某把武器`);
+  }
+  for (const name of DUAL_SFX) {
+    const cap = name.charAt(0).toUpperCase() + name.slice(1);
+    assert.ok(SYNTH_SFX.indexOf(name) !== -1, `${name} 应有合成实现`);
+    assert.ok(SAMPLE_ASSETS[name], `${name} 应有采样槽位`);
+    assert.equal(DEFAULT_CONFIG['sfx' + cap + 'Source'], 'sample', `${name} 需有来源偏好`);
+    assert.equal(DEFAULT_CONFIG['sfx' + cap + 'Sample'], 1, `${name} 采样音量独立存储`);
+    assert.equal(DEFAULT_CONFIG['sfx' + cap + 'Synth'], 1, `${name} 合成音量独立存储`);
+  }
+  // 反向也要一致：实际双实现的槽位不能漏登记，否则它会只有一套音量键
+  for (const name of Object.keys(SAMPLE_ASSETS)) {
+    if (SYNTH_SFX.indexOf(name) !== -1) {
+      assert.ok(DUAL_SFX.indexOf(name) !== -1, `${name} 实际双实现，必须登记进 DUAL_SFX`);
+    }
+  }
   for (const key of [
     'sfxLaserCharge',
     'sfxLaserFire',
@@ -1008,6 +1102,42 @@ await check('音效槽位与切换枚举', () => {
   ]) {
     assert.equal(DEFAULT_CONFIG[key], 1, `${key} 应有默认音量`);
   }
+
+  // 来源判断必须与实际实现一致：想要的那套不存在就回落，不能变成静音
+  const synthWeapon = { ...DEFAULT_CONFIG, bladeSoundSource: 'synth' };
+  assert.equal(
+    pickSfxSource(synthWeapon, 'bladeSwing2', true, false),
+    'sample',
+    '仅采样槽位在「全部合成」档下仍应走采样'
+  );
+  assert.equal(
+    pickSfxSource(synthWeapon, 'bladeSwing', true, true),
+    'synth',
+    '双实现槽位在「全部合成」档下走合成'
+  );
+  const sampleWeapon = { ...DEFAULT_CONFIG, bladeSoundSource: 'sample' };
+  assert.equal(
+    pickSfxSource(sampleWeapon, 'bladeCut', false, true),
+    'synth',
+    '仅合成槽位在「采样优先」档下走合成'
+  );
+  assert.equal(pickSfxSource(sampleWeapon, 'bladeSwing2', true, false), 'sample');
+
+  // custom 逐项：选了合成但没有合成实现，仍回落采样
+  const customWeapon = { ...DEFAULT_CONFIG, bladeSoundSource: 'custom' };
+  assert.equal(
+    pickSfxSource(customWeapon, 'bladeSwing', true, true),
+    'sample',
+    'custom 下未指定逐项来源时按采样'
+  );
+  customWeapon.sfxBladeSwingSource = 'synth';
+  assert.equal(pickSfxSource(customWeapon, 'bladeSwing', true, true), 'synth');
+  customWeapon.sfxBladeFinishSource = 'synth';
+  assert.equal(
+    pickSfxSource(customWeapon, 'bladeFinish', true, false),
+    'sample',
+    'custom 选了合成但没有合成实现时必须回落'
+  );
 });
 
 console.log(`\n通过 ${passed} 项，失败 ${failed} 项。`);

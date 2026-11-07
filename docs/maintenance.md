@@ -118,7 +118,7 @@ scripts/                ← 构建、图标、测试；不放运行时逻辑
 
 ```bash
 node scripts/build.mjs   # 会先清空 dist/
-node scripts/test.mjs    # 51 项
+node scripts/test.mjs    # 53 项
 ```
 
 四条不能省：
@@ -153,7 +153,8 @@ node scripts/test.mjs    # 51 项
 
 ## 7. 音效资源维护
 
-- 播放增益 = 总音量 × `sfx<Name>` × `gain`，上限 4
+- 播放增益 = 总音量 × 该套音量 × `gain`，上限 4。**双实现槽位（采样 + 合成都有）的音量是分开存的**：`sfx<Name>Sample` 与 `sfx<Name>Synth`，配置面板只显示当前预设那一套；单实现槽位沿用 `sfx<Name>`，`level(name, source)` 找不到后缀键时自动回落
+- 来源由 `sfxPreset`（`sample` / `synth` / `custom`）统一决定，`custom` 时读 `sfx<Name>Source`；**不要再往 `play()` 里加写死的名字白名单**（旧的 `laserSoundStyle` 就是这么烂掉的）
 - 三段现有素材的逐样本峰值都超过 1（1.01 / 1.10 / 1.04），换弹在默认总音量下约 1.25，**存在削波**
 - 收紧顺序：`gain` → 总音量 → 峰值限幅。不要用限幅掩盖「本来就不该那么响」
 - 采样缺失时自动回落合成音，所以「没声音」通常不是采样问题，先查浏览器音频解锁与总音量
